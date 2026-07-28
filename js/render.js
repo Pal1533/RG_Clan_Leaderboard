@@ -24,15 +24,42 @@ const hueOf = hex => {
   else h = (r - g) / (mx - mn) + 4;
   return Math.round(h * 60 + 360) % 360;
 };
-const crest = (clan, cls) =>
-  `<div class="${cls}" style="--accent:${clan.accent ?? "var(--grad-a)"}">${esc(clan.tagShort)}</div>`;
+// Activity windows — a player synced in the last 5 min is "hot" (still
+// grinding this session), 5m-1h is "warm" (recently active), older is
+// "cold". Renders as a colored dot on their avatar with a tooltip.
+const HOT_MS = 5 * 60_000;
+const WARM_MS = 60 * 60_000;
+export const syncClass = syncedAt => {
+  if (syncedAt == null) return "sync-none";
+  const age = Date.now() - syncedAt;
+  if (age < HOT_MS) return "sync-hot";
+  if (age < WARM_MS) return "sync-warm";
+  return "sync-cold";
+};
+export const fmtSyncAgo = syncedAt => {
+  if (syncedAt == null) return "Never synced this event";
+  const s = Math.max(0, Math.floor((Date.now() - syncedAt) / 1000));
+  if (s < 60) return `Synced ${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `Synced ${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `Synced ${h}h ago`;
+  return `Synced ${Math.floor(h / 24)}d ago`;
+};
+
+const crest = (clan, cls, extra = "") =>
+  `<div class="${cls}${extra ? " " + extra : ""}" style="--accent:${clan.accent ?? "var(--grad-a)"}">${esc(clan.tagShort)}</div>`;
 
 export function renderHeaderStats(clans, waiting = 0) {
   const players = clans.reduce((s, c) => s + c.members.length, 0);
+  const now = Date.now();
+  const grinding = clans.reduce((s, c) =>
+    s + c.rows.filter(r => r.syncedAt && (now - r.syncedAt) < HOT_MS).length, 0);
   const parts = [
     `<b>${clans.length}</b> clans competing`,
     `<b>${players}</b> players`,
   ];
+  if (grinding > 0) parts.push(`<b class="grinding"><span class="live-dot"></span>${grinding}</b> grinding now`);
   if (waiting > 0) parts.push(`<b>${waiting}</b> waiting to sync`);
   parts.push("scores sync live from ATLAS");
   $("subLine").innerHTML = parts.join(" · ");
@@ -47,10 +74,11 @@ export function renderPodium(clans, ctx = {}) {
   const order = [clans[1], clans[0], clans[2]].filter(Boolean);
   const cls = c => c === clans[0] ? "p1" : c === clans[1] ? "p2" : "p3";
   const label = c => c === clans[0] ? "Champion Seat" : c === clans[1] ? "2nd" : "3rd";
+  const isActive = c => c.rows.some(r => r.syncedAt && (Date.now() - r.syncedAt) < HOT_MS);
   pod.innerHTML = order.map(c => `
     <div class="step ${cls(c)}" style="--accent:${c.accent ?? "var(--grad-a)"}">
       <div class="place">${label(c)}</div>
-      ${crest(c, "crest")}
+      ${crest(c, "crest", isActive(c) ? "active" : "")}
       <div class="cname">${esc(c.tag)}</div>
       <div class="cmeta">${esc(c.name)} · ${rosterLabel(c.members.length, ctx.maxMembers)}</div>
       <div class="cscore ${c.score < 0 ? "neg" : ""}">${fmt(c.score)}<small>MMR gained</small></div>
@@ -62,10 +90,39 @@ export function renderPodium(clans, ctx = {}) {
 // re-renders (a snapshot ticks every few seconds) don't collapse them.
 const openIds = new Set();
 
+// Previous per-player delta, used to flash a row when someone gains MMR
+// between snapshots. Populated at the end of each renderStandings call.
+const prevDeltas = new Map();
+export const getPrevDeltas = () => prevDeltas;
+
 // External pin toggle handler wired by app.js — render.js doesn't own
 // the persistence layer, it just fires the intent.
 let pinHandler = null;
 export function onPinToggle(fn) { pinHandler = fn; }
+
+// Repaint freshness classes on all visible avatars every 30s so a player
+// synced 4m30s ago transitions to "warm" without waiting for a snapshot.
+// The dot color and tooltip stay honest even on an idle tab.
+setInterval(() => {
+  document.querySelectorAll(".ava[data-synced-at]").forEach(el => {
+    const raw = el.dataset.syncedAt;
+    const at = raw ? Number(raw) : null;
+    el.classList.remove("sync-hot", "sync-warm", "sync-cold", "sync-none");
+    el.classList.add(syncClass(at));
+    el.title = fmtSyncAgo(at);
+  });
+  // Crests turn on/off with the 5-min window too.
+  document.querySelectorAll(".crest-sm, .crest").forEach(el => {
+    const clanEl = el.closest(".clan, .step");
+    if (!clanEl) return;
+    const hot = [...clanEl.querySelectorAll(".ava[data-synced-at]")]
+      .some(a => {
+        const at = Number(a.dataset.syncedAt);
+        return at && (Date.now() - at) < HOT_MS;
+      });
+    el.classList.toggle("active", hot);
+  });
+}, 30_000);
 
 export function renderStandings(clans, ctx = {}) {
   const host = $("standings");
@@ -102,14 +159,28 @@ export function renderStandings(clans, ctx = {}) {
       const deltaCell = r.delta == null
         ? `<span class="delta none">no baseline</span>`
         : `<span class="delta ${r.delta >= 0 ? "up" : "down"}">${fmt(r.delta)}</span>`;
-      return `<tr class="${r.delta == null ? "nobase" : ""}">
-        <td><div class="m-name"><span class="ava" style="--seg:${seg}">${esc(initials(r.name))}</span>${esc(r.name)}</div></td>
+      const prev = prevDeltas.get(r.userId);
+      const gained = prev != null && r.delta != null && r.delta > prev;
+      const isMvp = r.userId && r.userId === ctx.mvpUserId;
+      const sync = syncClass(r.syncedAt);
+      const rowCls = [
+        r.delta == null ? "nobase" : "",
+        gained ? "just-gained" : "",
+        isMvp ? "mvp" : "",
+      ].filter(Boolean).join(" ");
+      return `<tr class="${rowCls}">
+        <td><div class="m-name">
+          <span class="ava ${sync}" style="--seg:${seg}" data-synced-at="${r.syncedAt ?? ""}" title="${esc(fmtSyncAgo(r.syncedAt))}">${esc(initials(r.name))}</span>
+          ${isMvp ? `<span class="mvp-crown" title="Top contributor across all clans" aria-label="MVP">♛</span>` : ""}
+          ${esc(r.name)}
+        </div></td>
         <td><span class="role ${esc(r.role)}">${esc(r.role)}</span></td>
         <td class="num">${r.base != null ? r.base.toLocaleString() : "—"}</td>
         <td class="num">${r.mmr != null ? r.mmr.toLocaleString() : "—"}</td>
         <td class="num">${deltaCell}</td>
       </tr>`;
     }).join("");
+    const clanIsActive = clan.rows.some(r => r.syncedAt && (Date.now() - r.syncedAt) < HOT_MS);
 
     const hasNoBase = clan.rows.some(r => r.delta == null);
     const memberPanelId = `members-${clan.id ?? idx}`;
@@ -124,7 +195,7 @@ export function renderStandings(clans, ctx = {}) {
       <button class="clan-row" aria-expanded="${el.classList.contains("open")}" aria-controls="${memberPanelId}">
         <span class="rank ${displayRank <= 3 ? "r" + displayRank : ""}">#${displayRank}</span>
         <span class="clan-id" style="--accent:${clan.accent ?? "var(--grad-a)"}">
-          ${crest(clan, "crest-sm")}
+          ${crest(clan, "crest-sm", clanIsActive ? "active" : "")}
           <span class="clan-text">
             <span class="clan-name-line">
               <span class="clan-tag">${esc(clan.tag)}</span>
@@ -178,6 +249,11 @@ export function renderStandings(clans, ctx = {}) {
       });
     });
   });
+
+  // Snapshot every current delta so the next render can flash whoever gained.
+  clans.forEach(clan => clan.rows.forEach(r => {
+    if (r.userId != null && r.delta != null) prevDeltas.set(r.userId, r.delta);
+  }));
 }
 
 // Consumers (deep links, tests) can force a clan open by id — the next
@@ -202,12 +278,14 @@ export function renderPlayers(players, ctx = {}) {
     const rankCls = rank === 1 ? "r1" : rank === 2 ? "r2" : rank === 3 ? "r3" : "";
     const seg = p.clanAccent ?? "var(--grad-a)";
     const deltaCls = p.delta > 0 ? "up" : p.delta < 0 ? "down" : "";
+    const sync = syncClass(p.syncedAt);
+    const isMvp = p.userId && p.userId === ctx.mvpUserId;
     return `<div class="players-row">
       <span class="rank ${rankCls}">#${rank}</span>
       <div class="p-ident">
-        <span class="ava" style="--seg:${seg}">${esc(initials(p.name))}</span>
+        <span class="ava ${sync}" style="--seg:${seg}" data-synced-at="${p.syncedAt ?? ""}" title="${esc(fmtSyncAgo(p.syncedAt))}">${esc(initials(p.name))}</span>
         <div class="p-name">
-          <span class="n">${esc(p.name)}</span>
+          <span class="n">${esc(p.name)}${isMvp ? ` <span class="mvp-crown" title="Top contributor across all clans" aria-label="MVP">♛</span>` : ""}</span>
           <span class="c" style="--accent:${seg}">from <b>${esc(p.clanTag)}</b></span>
         </div>
       </div>
