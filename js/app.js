@@ -3,7 +3,8 @@
 import { FIREBASE_CONFIG, COLLECTIONS, SDK } from "./config.js";
 import { buildStandings, currentEventId } from "./scoring.js";
 import { renderHeaderStats, renderPodium, renderStandings, renderPhase,
-         setEventTitle, setSyncLine, showDemoBanner } from "./render.js";
+         setEventTitle, setSyncLine, showDemoBanner, markSynced,
+         renderPerms } from "./render.js";
 import { DEMO } from "./demo-data.js";
 
 let eventConfig = null;
@@ -23,9 +24,13 @@ function parseEventDoc(d) {
 
 function renderAll() {
   const standings = buildStandings(lastRawClans, eventConfig);
-  renderHeaderStats(standings);
-  renderPodium(standings);
-  renderStandings(standings);
+  const evId = currentEventId(eventConfig);
+  const waiting = evId ? lastRawClans.filter(c => c.eventId !== evId).length : 0;
+  const ctx = { maxMembers: eventConfig?.maxMembers ?? null };
+  renderHeaderStats(standings, waiting);
+  renderPodium(standings, ctx);
+  renderStandings(standings, ctx);
+  renderPerms(eventConfig?.perms);
 }
 
 function loadDemo(reason) {
@@ -64,7 +69,8 @@ async function boot() {
       lastRawClans = [];
       snap.forEach(ds => lastRawClans.push({ id: ds.id, ...ds.data() }));
       renderAll();
-      setSyncLine(`Live from Firestore <code>rgleaderboard</code> · last update ${new Date().toLocaleTimeString()}`);
+      markSynced();
+      setSyncLine(`Live from Firestore <code>rgleaderboard</code>`);
     }, err => loadDemo("clans listener: " + err.message));
   } catch (e) { loadDemo(e.message); }
 }
