@@ -85,6 +85,45 @@
   .step .cscore small{display:block;font-size:10.5px;letter-spacing:.22em;
     color:var(--ink-dim);font-weight:600;margin-top:2px;text-transform:uppercase}
 
+  .controls{
+    display:grid;grid-template-columns:auto 1fr 190px;gap:12px;
+    align-items:center;margin-bottom:18px;
+  }
+  .tabs{
+    display:inline-flex;border:1px solid var(--line);border-radius:999px;
+    padding:3px;background:rgba(12,18,48,.65);backdrop-filter:blur(4px);
+  }
+  .tab{
+    font-family:var(--display);font-weight:600;font-size:11.5px;
+    letter-spacing:.22em;text-transform:uppercase;
+    padding:8px 16px;border-radius:999px;
+    background:transparent;border:none;color:var(--ink-dim);cursor:pointer;
+    transition:color .16s ease,background .16s ease;
+  }
+  .tab.active{
+    background:linear-gradient(93deg,var(--grad-a),var(--grad-b));
+    color:var(--ink);
+  }
+  .tab:focus-visible{outline:2px solid var(--grad-a);outline-offset:2px}
+  .controls input[type=search],.controls select{
+    font-family:var(--display);font-weight:600;font-size:13px;
+    color:var(--ink);background:rgba(12,18,48,.65);
+    border:1px solid var(--line);border-radius:12px;
+    padding:10px 14px;letter-spacing:.02em;
+    outline:none;transition:border-color .16s ease;
+    -webkit-appearance:none;appearance:none;
+  }
+  .controls input[type=search]:focus,.controls select:focus{border-color:var(--line-strong)}
+  .controls input[type=search]{min-width:0;width:100%}
+  .controls input[type=search]::placeholder{color:var(--ink-dim)}
+  .controls select{
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-dim) 50%),
+      linear-gradient(135deg,var(--ink-dim) 50%,transparent 50%);
+    background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+    padding-right:34px;
+  }
+
   .board{
     background:linear-gradient(180deg,rgba(19,27,68,.72),rgba(12,18,48,.86));
     border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(6px);
@@ -100,8 +139,20 @@
   }
   .board-head .num{text-align:right}
 
-  .clan{border-bottom:1px solid var(--line)}
+  .clan{border-bottom:1px solid var(--line);position:relative}
   .clan:last-child{border-bottom:none}
+  .clan.pinned{background:linear-gradient(90deg,rgba(255,210,74,.05),transparent 40%)}
+  .pin-btn{
+    position:absolute;top:14px;right:56px;z-index:2;
+    width:26px;height:26px;border-radius:50%;
+    background:transparent;border:none;cursor:pointer;
+    color:var(--ink-dim);font-size:14px;padding:0;
+    display:flex;align-items:center;justify-content:center;
+    transition:color .16s ease,transform .16s ease;
+  }
+  .pin-btn:hover{color:var(--gold);transform:scale(1.15)}
+  .pin-btn:focus-visible{outline:2px solid var(--grad-a);outline-offset:2px;border-radius:50%}
+  .clan.pinned .pin-btn{color:var(--gold);text-shadow:0 0 10px rgba(255,210,74,.5)}
   .clan-row{
     display:grid;grid-template-columns:64px 1fr 150px 44px;gap:12px;align-items:center;
     width:100%;padding:17px 22px;background:none;border:none;cursor:pointer;
@@ -169,6 +220,23 @@
   .nobase td{opacity:.5}
   .note{font-size:12px;color:var(--ink-dim);letter-spacing:.05em;padding:10px 10px 0;font-weight:600}
 
+  .board-head.players-head{grid-template-columns:64px 1fr 140px 100px}
+  .players-row{
+    display:grid;grid-template-columns:64px 1fr 140px 100px;gap:12px;
+    align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);
+  }
+  .players-row:last-child{border-bottom:none}
+  .p-ident{display:flex;align-items:center;gap:14px;min-width:0}
+  .p-name{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .p-name .n{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:.02em}
+  .p-name .c{font-size:12.5px;color:var(--ink-dim);font-weight:600;letter-spacing:.03em}
+  .p-name .c b{color:var(--accent,var(--ink));font-family:var(--display);letter-spacing:.05em}
+  .p-delta{text-align:right;font-family:var(--display);font-weight:700;font-size:22px;
+    font-variant-numeric:tabular-nums}
+  .p-delta.up{color:var(--gain)} .p-delta.down{color:var(--loss)}
+  .p-mmr{text-align:right;font-family:var(--display);font-weight:600;font-size:14px;
+    color:var(--ink-dim);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+
   .state{padding:56px 24px;text-align:center;color:var(--ink-dim);font-weight:600;font-size:16px}
   .state .big{font-family:var(--display);font-style:italic;font-weight:700;font-size:22px;
     color:var(--ink);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}
@@ -207,6 +275,13 @@
     .clan-score .val{font-size:18px}
     .members-inner{padding:0 10px 16px;overflow-x:auto}
     thead th:nth-child(3),tbody td:nth-child(3){display:none}
+    .controls{grid-template-columns:1fr;gap:8px}
+    .controls select{width:100%}
+    .pin-btn{top:11px;right:44px;width:22px;height:22px;font-size:12px}
+    .board-head.players-head{grid-template-columns:42px 1fr 84px 60px;padding:13px 14px}
+    .players-row{grid-template-columns:42px 1fr 84px 60px;padding:14px 14px}
+    .p-name .n{font-size:14.5px}
+    .p-delta{font-size:16px}
   }
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation:none!important;transition:none!important}

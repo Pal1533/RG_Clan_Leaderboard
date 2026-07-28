@@ -62,6 +62,11 @@ export function renderPodium(clans, ctx = {}) {
 // re-renders (a snapshot ticks every few seconds) don't collapse them.
 const openIds = new Set();
 
+// External pin toggle handler wired by app.js — render.js doesn't own
+// the persistence layer, it just fires the intent.
+let pinHandler = null;
+export function onPinToggle(fn) { pinHandler = fn; }
+
 export function renderStandings(clans, ctx = {}) {
   const host = $("standings");
 
@@ -73,13 +78,16 @@ export function renderStandings(clans, ctx = {}) {
   });
 
   if (!clans.length) {
-    host.innerHTML = `<div class="state"><div class="big">No clans scored yet</div>
-      Baselines lock the first time each member syncs during the event window.</div>`;
+    host.innerHTML = ctx.emptyReason === "filter"
+      ? `<div class="state"><div class="big">No clans match</div>
+         Try a different search — matches on tag or full name.</div>`
+      : `<div class="state"><div class="big">No clans scored yet</div>
+         Baselines lock the first time each member syncs during the event window.</div>`;
     return;
   }
+  const pinned = ctx.pinned instanceof Set ? ctx.pinned : new Set();
   host.innerHTML = "";
   clans.forEach((clan, idx) => {
-    const rankCls = idx === 0 ? "r1" : idx === 1 ? "r2" : idx === 2 ? "r3" : "";
     const counting = clan.rows.filter(r => (r.delta ?? 0) > 0);
     const posTotal = counting.reduce((s, r) => s + r.delta, 0) || 1;
     const hue = hueOf(clan.accent);
@@ -105,13 +113,16 @@ export function renderStandings(clans, ctx = {}) {
 
     const hasNoBase = clan.rows.some(r => r.delta == null);
     const memberPanelId = `members-${clan.id ?? idx}`;
+    const isPinned = clan.id && pinned.has(clan.id);
+    const displayRank = clan.rank ?? idx + 1;
     const el = document.createElement("div");
-    el.className = "clan";
+    el.className = "clan" + (isPinned ? " pinned" : "");
     if (clan.id) el.dataset.clanId = clan.id;
     if (clan.id && openIds.has(clan.id)) el.classList.add("open");
     el.innerHTML = `
+      <button class="pin-btn" type="button" aria-label="${isPinned ? "Unpin" : "Pin"} ${esc(clan.tag)}" aria-pressed="${isPinned}">${isPinned ? "★" : "☆"}</button>
       <button class="clan-row" aria-expanded="${el.classList.contains("open")}" aria-controls="${memberPanelId}">
-        <span class="rank ${rankCls}">#${idx + 1}</span>
+        <span class="rank ${displayRank <= 3 ? "r" + displayRank : ""}">#${displayRank}</span>
         <span class="clan-id" style="--accent:${clan.accent ?? "var(--grad-a)"}">
           ${crest(clan, "crest-sm")}
           <span class="clan-text">
@@ -142,6 +153,11 @@ export function renderStandings(clans, ctx = {}) {
       btn.setAttribute("aria-expanded", open);
       if (clan.id) { open ? openIds.add(clan.id) : openIds.delete(clan.id); }
     });
+    const pin = el.querySelector(".pin-btn");
+    pin.addEventListener("click", e => {
+      e.stopPropagation();
+      if (clan.id && pinHandler) pinHandler(clan.id);
+    });
     host.appendChild(el);
   });
 
@@ -169,6 +185,36 @@ export function renderStandings(clans, ctx = {}) {
 export function setOpenClan(id, open = true) {
   if (!id) return;
   if (open) openIds.add(id); else openIds.delete(id);
+}
+
+// Top individual contributors across all clans, sorted by delta desc.
+// Rank is dense so ties share a number.
+export function renderPlayers(players, ctx = {}) {
+  const host = $("playersList");
+  if (!players.length) {
+    host.innerHTML = ctx.emptyReason === "filter"
+      ? `<div class="state"><div class="big">No players match</div>Try a different name.</div>`
+      : `<div class="state"><div class="big">No contributions yet</div>Baselines lock on first ATLAS sync inside the event window.</div>`;
+    return;
+  }
+  host.innerHTML = players.map((p, i) => {
+    const rank = i + 1;
+    const rankCls = rank === 1 ? "r1" : rank === 2 ? "r2" : rank === 3 ? "r3" : "";
+    const seg = p.clanAccent ?? "var(--grad-a)";
+    const deltaCls = p.delta > 0 ? "up" : p.delta < 0 ? "down" : "";
+    return `<div class="players-row">
+      <span class="rank ${rankCls}">#${rank}</span>
+      <div class="p-ident">
+        <span class="ava" style="--seg:${seg}">${esc(initials(p.name))}</span>
+        <div class="p-name">
+          <span class="n">${esc(p.name)}</span>
+          <span class="c" style="--accent:${seg}">from <b>${esc(p.clanTag)}</b></span>
+        </div>
+      </div>
+      <span class="p-delta ${deltaCls}">${fmt(p.delta)}</span>
+      <span class="p-mmr">${p.mmr != null ? p.mmr.toLocaleString() : "—"}</span>
+    </div>`;
+  }).join("");
 }
 
 // Phase chip + live countdown. Re-derives phase from Date.now() on every
