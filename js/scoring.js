@@ -33,11 +33,13 @@ export function scoreClan(clan, eventConfig) {
     const base = baseline ? baseline[m.userId] : null;
     const has = base != null && typeof m.mmr === "number";
     return {
+      userId: m.userId ?? null,
       name: stripTMP(m.name) || "Unknown",
       role: m.role ?? "member",
       mmr: typeof m.mmr === "number" ? m.mmr : null,
       base: has ? base : null,
       delta: has ? m.mmr - base : null,
+      syncedAt: typeof m.syncedAt === "number" ? m.syncedAt : null,
     };
   }).sort((a, b) => (b.delta ?? -Infinity) - (a.delta ?? -Infinity));
   const score = rows.reduce((s, r) => s + (r.delta ?? 0), 0);
