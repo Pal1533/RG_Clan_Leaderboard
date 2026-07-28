@@ -1,15 +1,28 @@
 // Boot + Firestore wiring. Same access pattern as ATLAS: SDK ESM from
-// gstatic, unauthenticated reads, onSnapshot for live standings.
+// gstatic, unauthenticated reads, onSnapshot for both events/current and clans.
 import { FIREBASE_CONFIG, COLLECTIONS, SDK } from "./config.js";
-import { buildStandings, eventPhase, currentEventId } from "./scoring.js";
+import { buildStandings, currentEventId } from "./scoring.js";
 import { renderHeaderStats, renderPodium, renderStandings, renderPhase,
          setEventTitle, setSyncLine, showDemoBanner } from "./render.js";
 import { DEMO } from "./demo-data.js";
 
 let eventConfig = null;
+let lastRawClans = [];
 
-function renderAll(rawClans) {
-  const standings = buildStandings(rawClans, eventConfig);
+const millisOf = t => (t?.toMillis ? t.toMillis() : (typeof t === "number" ? t : 0));
+
+function parseEventDoc(d) {
+  return {
+    name: d.name ?? "Clan Clash Cup",
+    startTime: millisOf(d.startTime),
+    endTime: millisOf(d.endTime),
+    maxMembers: typeof d.maxMembers === "number" ? d.maxMembers : null,
+    perms: d.perms ?? null,
+  };
+}
+
+function renderAll() {
+  const standings = buildStandings(lastRawClans, eventConfig);
   renderHeaderStats(standings);
   renderPodium(standings);
   renderStandings(standings);
@@ -19,41 +32,38 @@ function loadDemo(reason) {
   console.warn("[ClashCup] falling back to demo data:", reason);
   showDemoBanner();
   setSyncLine("Demo mode — sample data mirroring <code>clans/{clanId}</code>.");
-  eventConfig = DEMO.event;
+  eventConfig = { ...DEMO.event, maxMembers: 5, perms: null };
   const evId = currentEventId(eventConfig);
   DEMO.clans.forEach(c => { c.eventId = evId; });
-  setEventTitle(DEMO.event.name);
-  renderPhase(eventConfig, eventPhase(eventConfig));
-  renderAll(DEMO.clans);
+  setEventTitle(eventConfig.name);
+  renderPhase(eventConfig);
+  lastRawClans = DEMO.clans;
+  renderAll();
 }
 
 async function boot() {
   let fb;
   try {
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
-    const { getFirestore, doc, getDoc, collection, onSnapshot } =
+    const { getFirestore, doc, collection, onSnapshot } =
       await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const app = initializeApp(FIREBASE_CONFIG);
-    fb = { db: getFirestore(app), doc, getDoc, collection, onSnapshot };
+    fb = { db: getFirestore(app), doc, collection, onSnapshot };
   } catch (e) { return loadDemo("SDK load failed: " + e.message); }
 
   try {
-    const snap = await fb.getDoc(fb.doc(fb.db, ...COLLECTIONS.eventDoc));
-    if (snap.exists()) {
-      const d = snap.data();
-      eventConfig = {
-        name: d.name ?? "Clan Clash Cup",
-        startTime: d.startTime?.toMillis ? d.startTime.toMillis() : (d.startTime ?? 0),
-        endTime: d.endTime?.toMillis ? d.endTime.toMillis() : (d.endTime ?? 0),
-      };
+    fb.onSnapshot(fb.doc(fb.db, ...COLLECTIONS.eventDoc), snap => {
+      if (!snap.exists()) { eventConfig = null; renderPhase(null); return; }
+      eventConfig = parseEventDoc(snap.data());
       setEventTitle(eventConfig.name);
-    }
-    renderPhase(eventConfig, eventPhase(eventConfig));
+      renderPhase(eventConfig);
+      renderAll();
+    }, err => loadDemo("event listener: " + err.message));
 
     fb.onSnapshot(fb.collection(fb.db, COLLECTIONS.clans), snap => {
-      const clans = [];
-      snap.forEach(ds => clans.push({ id: ds.id, ...ds.data() }));
-      renderAll(clans);
+      lastRawClans = [];
+      snap.forEach(ds => lastRawClans.push({ id: ds.id, ...ds.data() }));
+      renderAll();
       setSyncLine(`Live from Firestore <code>rgleaderboard</code> · last update ${new Date().toLocaleTimeString()}`);
     }, err => loadDemo("clans listener: " + err.message));
   } catch (e) { loadDemo(e.message); }

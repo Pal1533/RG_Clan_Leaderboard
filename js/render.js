@@ -1,5 +1,6 @@
 // DOM rendering for the Clash Cup page. Consumes standings produced by
 // scoring.js — no Firebase, no scoring math in here.
+import { eventPhase } from "./scoring.js";
 
 const $ = id => document.getElementById(id);
 const fmt = n => (n > 0 ? "+" : "") + Math.round(n).toLocaleString();
@@ -120,30 +121,39 @@ export function renderStandings(clans) {
   });
 }
 
-// Phase chip + live countdown. Returns the interval id so callers can clear it.
+// Phase chip + live countdown. Re-derives phase from Date.now() on every
+// tick so the chip transitions upcoming → active → ended without a reload.
 let tick = null;
-export function renderPhase(eventConfig, phase) {
+const pad2 = n => String(n).padStart(2, "0");
+export function renderPhase(eventConfig) {
   const chip = $("phaseChip"), txt = $("phaseText"),
         cChip = $("countChip"), cd = $("countdown");
-  chip.classList.remove("ended", "upcoming");
-  if (phase === "active") txt.textContent = "Live Event";
-  else if (phase === "upcoming") { txt.textContent = "Starts Soon"; chip.classList.add("upcoming"); }
-  else if (phase === "ended") { txt.textContent = "Event Ended"; chip.classList.add("ended"); }
-  else { txt.textContent = "No Active Event"; chip.classList.add("ended"); }
 
-  if (eventConfig && (phase === "active" || phase === "upcoming")) {
+  const applyPhase = phase => {
+    chip.classList.remove("ended", "upcoming");
+    if (phase === "active") txt.textContent = "Live Event";
+    else if (phase === "upcoming") { txt.textContent = "Starts Soon"; chip.classList.add("upcoming"); }
+    else if (phase === "ended") { txt.textContent = "Event Ended"; chip.classList.add("ended"); }
+    else { txt.textContent = "No Active Event"; chip.classList.add("ended"); }
+  };
+
+  clearInterval(tick);
+  if (!eventConfig) { applyPhase("none"); cChip.style.display = "none"; return; }
+
+  const draw = () => {
+    const phase = eventPhase(eventConfig);
+    applyPhase(phase);
+    if (phase !== "active" && phase !== "upcoming") { cChip.style.display = "none"; return; }
     cChip.style.display = "";
     const target = phase === "active" ? eventConfig.endTime : eventConfig.startTime;
     const suffix = phase === "active" ? " left" : " to start";
-    const draw = () => {
-      let ms = Math.max(0, target - Date.now());
-      const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5),
-            m = Math.floor(ms % 36e5 / 6e4), s = Math.floor(ms % 6e4 / 1e3);
-      cd.textContent = (d ? `${d}d ${h}h ${m}m` : h ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`) + suffix;
-      if (ms === 0) clearInterval(tick);
-    };
-    clearInterval(tick); tick = setInterval(draw, 1000); draw();
-  } else cChip.style.display = "none";
+    let ms = Math.max(0, target - Date.now());
+    const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5),
+          m = Math.floor(ms % 36e5 / 6e4), s = Math.floor(ms % 6e4 / 1e3);
+    cd.textContent = (d ? `${d}d ${pad2(h)}h ${pad2(m)}m` : `${pad2(h)}:${pad2(m)}:${pad2(s)}`) + suffix;
+  };
+  draw();
+  tick = setInterval(draw, 1000);
 }
 
 export function setEventTitle(name) { $("eventTitle").textContent = name; }
