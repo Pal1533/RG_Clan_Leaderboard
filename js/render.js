@@ -27,12 +27,21 @@ const hueOf = hex => {
 const crest = (clan, cls) =>
   `<div class="${cls}" style="--accent:${clan.accent ?? "var(--grad-a)"}">${esc(clan.tagShort)}</div>`;
 
-export function renderHeaderStats(clans) {
-  $("statClans").textContent = clans.length;
-  $("statPlayers").textContent = clans.reduce((s, c) => s + c.members.length, 0);
+export function renderHeaderStats(clans, waiting = 0) {
+  const players = clans.reduce((s, c) => s + c.members.length, 0);
+  const parts = [
+    `<b>${clans.length}</b> clans competing`,
+    `<b>${players}</b> players`,
+  ];
+  if (waiting > 0) parts.push(`<b>${waiting}</b> waiting to sync`);
+  parts.push("scores sync live from ATLAS");
+  $("subLine").innerHTML = parts.join(" · ");
 }
 
-export function renderPodium(clans) {
+// Format "N / max" when maxMembers is known, else fall back to "N members".
+const rosterLabel = (count, max) => max ? `${count} / ${max} members` : `${count} members`;
+
+export function renderPodium(clans, ctx = {}) {
   const pod = $("podium");
   if (clans.length < 2) { pod.style.display = "none"; return; }
   const order = [clans[1], clans[0], clans[2]].filter(Boolean);
@@ -43,7 +52,7 @@ export function renderPodium(clans) {
       <div class="place">${label(c)}</div>
       ${crest(c, "crest")}
       <div class="cname">${esc(c.tag)}</div>
-      <div class="cmeta">${esc(c.name)} · ${c.members.length} members</div>
+      <div class="cmeta">${esc(c.name)} · ${rosterLabel(c.members.length, ctx.maxMembers)}</div>
       <div class="cscore ${c.score < 0 ? "neg" : ""}">${fmt(c.score)}<small>MMR gained</small></div>
     </div>`).join("");
   pod.style.display = "grid";
@@ -53,7 +62,7 @@ export function renderPodium(clans) {
 // re-renders (a snapshot ticks every few seconds) don't collapse them.
 const openIds = new Set();
 
-export function renderStandings(clans) {
+export function renderStandings(clans, ctx = {}) {
   const host = $("standings");
 
   // FLIP: capture current positions before we rebuild, so we can animate
@@ -108,7 +117,7 @@ export function renderStandings(clans) {
           <span class="clan-text">
             <span class="clan-name-line">
               <span class="clan-tag">${esc(clan.tag)}</span>
-              <span class="clan-meta">${esc(clan.name)} · ${clan.members.length} members</span>
+              <span class="clan-meta">${esc(clan.name)} · ${rosterLabel(clan.members.length, ctx.maxMembers)}</span>
             </span>
             <span class="relay ${counting.length ? "" : "empty"}" aria-hidden="true">${relay}</span>
           </span>
@@ -200,3 +209,53 @@ export function renderPhase(eventConfig) {
 export function setEventTitle(name) { $("eventTitle").textContent = name; }
 export function setSyncLine(html) { $("syncLine").innerHTML = html; }
 export function showDemoBanner() { $("demoBanner").style.display = "block"; }
+
+// Live "updated Xs ago" chip. Ticks every second; goes amber past 60s
+// so a silent listener doesn't look fresh forever.
+let lastSyncAt = null;
+let syncTick = null;
+const fmtAgo = ms => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+};
+export function markSynced(now = Date.now()) {
+  lastSyncAt = now;
+  const chip = $("syncBadge"), txt = $("syncBadgeText");
+  chip.style.display = "";
+  const draw = () => {
+    const age = Date.now() - lastSyncAt;
+    txt.textContent = `Updated ${fmtAgo(age)}`;
+    chip.classList.toggle("stale", age > 60_000);
+  };
+  clearInterval(syncTick);
+  draw();
+  syncTick = setInterval(draw, 1000);
+}
+
+// Human-readable summary of what event.perms locks. Empty when no perms
+// object or when nothing meaningful is disabled.
+const PERM_LABELS = {
+  allowLeave: "leaving",
+  allowDisband: "disbanding",
+  allowTransfer: "transferring",
+  allowRoleChange: "role changes",
+  allowRenameClan: "renaming",
+  allowKick: "kicking",
+  allowJoin: "new members",
+  allowApprove: "approvals",
+  allowClanCreate: "new clans",
+};
+export function renderPerms(perms) {
+  const el = $("permsNote");
+  if (!perms) { el.textContent = ""; return; }
+  const locked = Object.entries(PERM_LABELS)
+    .filter(([k]) => perms[k] === false)
+    .map(([, label]) => label);
+  el.textContent = locked.length
+    ? `Event lock: ${locked.join(" · ")} disabled until the event ends.`
+    : "";
+}

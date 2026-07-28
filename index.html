@@ -15,9 +15,10 @@
     <div class="chips">
       <span class="chip" id="phaseChip"><span class="dot"></span><span id="phaseText">Connecting…</span></span>
       <span class="chip" id="countChip" style="display:none"><strong id="countdown">–</strong></span>
+      <span class="chip sync" id="syncBadge" style="display:none"><span class="dot"></span><span id="syncBadgeText">–</span></span>
     </div>
     <h1 id="eventTitle">Clan Clash Cup</h1>
-    <p class="sub"><b id="statClans">–</b> clans competing · <b id="statPlayers">–</b> players · scores sync live from ATLAS</p>
+    <p class="sub" id="subLine">–</p>
   </header>
 
   <div class="banner" id="demoBanner">Demo data — Firestore unreachable from this preview. Open on GitHub Pages or locally for live standings.</div>
@@ -35,6 +36,7 @@
 
   <footer>
     Clan score = Σ (current MMR − event baseline) across all members with a locked baseline — identical to the in-game HUD math.<br>
+    <span id="permsNote" class="perms-note"></span>
     <span id="syncLine">Reading <code>clans</code> + <code>events/current</code> from Firestore project <code>rgleaderboard</code>…</span>
   </footer>
 </div>
