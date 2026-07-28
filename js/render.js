@@ -49,8 +49,20 @@ export function renderPodium(clans) {
   pod.style.display = "grid";
 }
 
+// Which clan accordions the user has opened, kept in module state so
+// re-renders (a snapshot ticks every few seconds) don't collapse them.
+const openIds = new Set();
+
 export function renderStandings(clans) {
   const host = $("standings");
+
+  // FLIP: capture current positions before we rebuild, so we can animate
+  // rank swaps once the new DOM is in place.
+  const prevTops = new Map();
+  host.querySelectorAll(".clan").forEach(el => {
+    if (el.dataset.clanId) prevTops.set(el.dataset.clanId, el.getBoundingClientRect().top);
+  });
+
   if (!clans.length) {
     host.innerHTML = `<div class="state"><div class="big">No clans scored yet</div>
       Baselines lock the first time each member syncs during the event window.</div>`;
@@ -83,10 +95,13 @@ export function renderStandings(clans) {
     }).join("");
 
     const hasNoBase = clan.rows.some(r => r.delta == null);
+    const memberPanelId = `members-${clan.id ?? idx}`;
     const el = document.createElement("div");
     el.className = "clan";
+    if (clan.id) el.dataset.clanId = clan.id;
+    if (clan.id && openIds.has(clan.id)) el.classList.add("open");
     el.innerHTML = `
-      <button class="clan-row" aria-expanded="false">
+      <button class="clan-row" aria-expanded="${el.classList.contains("open")}" aria-controls="${memberPanelId}">
         <span class="rank ${rankCls}">#${idx + 1}</span>
         <span class="clan-id" style="--accent:${clan.accent ?? "var(--grad-a)"}">
           ${crest(clan, "crest-sm")}
@@ -104,7 +119,7 @@ export function renderStandings(clans) {
         </span>
         <span class="chev" aria-hidden="true">▼</span>
       </button>
-      <div class="members"><div class="members-inner">
+      <div class="members" id="${memberPanelId}" role="region" aria-label="${esc(clan.tag)} members"><div class="members-inner">
         <table>
           <thead><tr><th>Player</th><th>Role</th><th class="num">Baseline</th>
           <th class="num">Current</th><th class="num">Contribution</th></tr></thead>
@@ -116,9 +131,35 @@ export function renderStandings(clans) {
     btn.addEventListener("click", () => {
       const open = el.classList.toggle("open");
       btn.setAttribute("aria-expanded", open);
+      if (clan.id) { open ? openIds.add(clan.id) : openIds.delete(clan.id); }
     });
     host.appendChild(el);
   });
+
+  // FLIP part 2: animate any row that moved. Reduced-motion CSS already
+  // nukes the transition, so nothing to guard for here.
+  requestAnimationFrame(() => {
+    host.querySelectorAll(".clan").forEach(el => {
+      const id = el.dataset.clanId;
+      const prev = prevTops.get(id);
+      if (prev == null) return;
+      const dy = prev - el.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) return;
+      el.style.transition = "none";
+      el.style.transform = `translateY(${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = "transform .28s cubic-bezier(.4,.0,.2,1)";
+        el.style.transform = "";
+      });
+    });
+  });
+}
+
+// Consumers (deep links, tests) can force a clan open by id — the next
+// render will honor it via the persisted openIds set.
+export function setOpenClan(id, open = true) {
+  if (!id) return;
+  if (open) openIds.add(id); else openIds.delete(id);
 }
 
 // Phase chip + live countdown. Re-derives phase from Date.now() on every
