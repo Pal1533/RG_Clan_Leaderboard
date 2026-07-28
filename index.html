@@ -25,13 +25,33 @@
 
   <section class="podium" id="podium" style="display:none"></section>
 
-  <section class="board" aria-label="Clan standings">
+  <div class="controls" id="controls">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="clans" role="tab" aria-selected="true">Clans</button>
+      <button class="tab" data-tab="players" role="tab" aria-selected="false">Top Players</button>
+    </div>
+    <input type="search" id="filterInput" placeholder="Search clan or player…" aria-label="Filter">
+    <select id="sortSelect" aria-label="Sort" data-view="clans">
+      <option value="score">Sort · Score</option>
+      <option value="members">Sort · Members</option>
+      <option value="alpha">Sort · A → Z</option>
+    </select>
+  </div>
+
+  <section class="board" aria-label="Standings" id="clansBoard">
     <div class="board-head">
       <span>Rank</span><span>Clan</span><span class="num">Clan Score</span><span></span>
     </div>
     <div id="standings">
       <div class="skeleton"><div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div></div>
     </div>
+  </section>
+
+  <section class="board" aria-label="Top players" id="playersBoard" style="display:none">
+    <div class="board-head players-head">
+      <span>Rank</span><span>Player</span><span class="num">Contribution</span><span class="num">MMR</span>
+    </div>
+    <div id="playersList"></div>
   </section>
 
   <footer>
