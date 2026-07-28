@@ -60,8 +60,15 @@ export function buildStandings(rawClans, eventConfig) {
     .sort((a, b) => b.score - a.score);
 }
 
-// First <#RRGGBB> in a clan's TextMeshPro tagStyle becomes its accent color.
+// Clan accent color. Live tagStyle is an object like
+// { mode, color, gradientStart, gradientEnd, bracketColor, ... }; older
+// data (and the demo fixture) uses a TMP string like "<#RRGGBB>...". Handle both.
 export const accentFrom = style => {
-  const m = /<#([0-9a-fA-F]{6})>/.exec(String(style ?? ""));
+  if (!style) return null;
+  if (typeof style === "object") {
+    const pick = style.color ?? style.gradientStart ?? style.gradientEnd ?? style.bracketColor;
+    return /^#[0-9a-fA-F]{6}$/.test(String(pick ?? "")) ? pick : null;
+  }
+  const m = /<#([0-9a-fA-F]{6})>/.exec(String(style));
   return m ? "#" + m[1] : null;
 };
