@@ -69,7 +69,14 @@ function renderAll() {
   standings.forEach((c, i) => { c.rank = i + 1; });
   const evId = currentEventId(eventConfig);
   const waiting = evId ? lastRawClans.filter(c => c.eventId !== evId).length : 0;
-  const ctx = { maxMembers: eventConfig?.maxMembers ?? null, pinned: pinnedIds };
+  // MVP = top single contributor across every clan. Ties break by first-seen.
+  const allPlayers = buildPlayerBoard(standings);
+  const mvpUserId = allPlayers[0]?.userId ?? null;
+  const ctx = {
+    maxMembers: eventConfig?.maxMembers ?? null,
+    pinned: pinnedIds,
+    mvpUserId,
+  };
 
   renderHeaderStats(standings, waiting);
   renderPodium(standings, ctx);
@@ -87,7 +94,7 @@ function renderAll() {
     const filtered = q
       ? players.filter(p => p.name.toLowerCase().includes(q) || p.clanTag.toLowerCase().includes(q))
       : players;
-    renderPlayers(filtered, { emptyReason: q ? "filter" : null });
+    renderPlayers(filtered, { ...ctx, emptyReason: q ? "filter" : null });
     clansBoard.style.display = "none"; playersBoard.style.display = "";
   }
 }

@@ -51,6 +51,11 @@
   }
   .sub{color:var(--ink-dim);font-size:17px;font-weight:600;letter-spacing:.04em}
   .sub b{color:var(--ink)}
+  .sub b.grinding{color:var(--gain);display:inline-flex;align-items:center;gap:6px}
+  .sub b.grinding .live-dot{
+    width:7px;height:7px;border-radius:50%;background:var(--gain);
+    box-shadow:0 0 8px var(--gain);animation:pulse 1.6s infinite;
+  }
 
   .podium{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:14px;align-items:end;
     margin:clamp(26px,4vw,40px) 0}
@@ -206,7 +211,39 @@
     display:flex;align-items:center;justify-content:center;
     font-family:var(--display);font-weight:700;font-size:11px;
     background:rgba(255,255,255,.05);border:1px solid var(--line);
-    color:var(--seg,var(--ink-dim))}
+    color:var(--seg,var(--ink-dim));position:relative}
+  /* Freshness dot — signals when a player last synced their MMR. */
+  .ava::after{
+    content:"";position:absolute;top:-3px;right:-3px;
+    width:9px;height:9px;border-radius:50%;
+    border:2px solid var(--navy-1);background:var(--ink-dim);
+    transition:background .3s ease,box-shadow .3s ease,opacity .3s ease;
+  }
+  .ava.sync-hot::after{background:var(--gain);box-shadow:0 0 8px var(--gain);animation:pulse 1.6s infinite}
+  .ava.sync-warm::after{background:var(--gold);box-shadow:0 0 6px rgba(255,210,74,.5)}
+  .ava.sync-cold::after{background:var(--ink-dim);opacity:.5}
+  .ava.sync-none::after{display:none}
+  /* MVP crown next to the top individual contributor across all clans. */
+  .mvp-crown{font-size:14px;color:var(--gold);
+    text-shadow:0 0 10px rgba(255,210,74,.6);
+    animation:pulse 2.4s infinite;line-height:1}
+  /* Row flashes green for a beat when its delta just increased. */
+  tbody tr.just-gained{animation:rowFlash 2.4s ease-out}
+  @keyframes rowFlash{
+    0%{background:rgba(74,222,128,.22)}
+    60%{background:rgba(74,222,128,.08)}
+    100%{background:transparent}
+  }
+  /* Active clan pulse — visible on the crest without expanding the row. */
+  .crest-sm.active,.crest.active{
+    box-shadow:0 0 0 0 rgba(74,222,128,.55);
+    animation:activePulse 2s infinite;
+  }
+  @keyframes activePulse{
+    0%{box-shadow:0 0 0 0 rgba(74,222,128,.5),inset 0 0 22px rgba(168,85,247,.12)}
+    70%{box-shadow:0 0 0 8px rgba(74,222,128,0),inset 0 0 22px rgba(168,85,247,.12)}
+    100%{box-shadow:0 0 0 0 rgba(74,222,128,0),inset 0 0 22px rgba(168,85,247,.12)}
+  }
   .role{font-family:var(--display);font-size:9.5px;font-weight:600;letter-spacing:.14em;
     text-transform:uppercase;padding:3px 8px;border-radius:6px;
     border:1px solid var(--line);color:var(--ink-dim);white-space:nowrap}
