@@ -63,6 +63,24 @@
       <option value="members">Sort · Members</option>
       <option value="alpha">Sort · A → Z</option>
     </select>
+    <div class="actions" role="toolbar" aria-label="Page actions">
+      <button class="act" id="shareBtn"   type="button" title="Copy shareable link" aria-label="Share">↗</button>
+      <button class="act" id="shotBtn"    type="button" title="Save standings as PNG" aria-label="Screenshot">◨</button>
+      <button class="act" id="streamBtn"  type="button" title="Streamer / fullscreen mode (F)" aria-label="Streamer mode">⛶</button>
+      <button class="act" id="notifyBtn"  type="button" title="Notify me on rank changes" aria-label="Notifications">🔔</button>
+    </div>
+  </div>
+
+  <!-- Compare modal — opened when the user picks two clans via the "vs" buttons. -->
+  <div class="modal" id="compareModal" role="dialog" aria-modal="true" aria-label="Compare clans" hidden>
+    <div class="modal-scrim" data-close></div>
+    <div class="modal-card" id="compareCard"></div>
+  </div>
+
+  <!-- Compare pick banner — shown after selecting one clan while waiting for the second. -->
+  <div class="pick-banner" id="pickBanner" hidden>
+    <span id="pickBannerText">Pick another clan to compare vs <b id="pickBannerA">–</b></span>
+    <button class="link-btn" id="pickCancel" type="button">Cancel</button>
   </div>
 
   <section class="board" aria-label="Standings" id="clansBoard">

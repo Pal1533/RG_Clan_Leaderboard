@@ -122,6 +122,10 @@ export const getPrevDeltas = () => prevDeltas;
 let pinHandler = null;
 export function onPinToggle(fn) { pinHandler = fn; }
 
+// Compare toggle handler — user clicked the "vs" button on a clan row.
+let compareHandler = null;
+export function onCompareToggle(fn) { compareHandler = fn; }
+
 // Broadcast-style live feed: rank flips and big gains. Newest on the
 // left; capped so the DOM stays cheap. Older events fade based on age.
 const TICKER_MAX = 12;
@@ -251,7 +255,9 @@ export function renderStandings(clans, ctx = {}) {
     el.className = "clan" + (isPinned ? " pinned" : "");
     if (clan.id) el.dataset.clanId = clan.id;
     if (clan.id && openIds.has(clan.id)) el.classList.add("open");
+    const inCompare = ctx.compareSelection?.has(clan.id);
     el.innerHTML = `
+      <button class="vs-btn ${inCompare ? "on" : ""}" type="button" aria-label="Compare ${esc(clan.tag)}" aria-pressed="${inCompare}">vs</button>
       <button class="pin-btn" type="button" aria-label="${isPinned ? "Unpin" : "Pin"} ${esc(clan.tag)}" aria-pressed="${isPinned}">${isPinned ? "★" : "☆"}</button>
       <button class="clan-row" aria-expanded="${el.classList.contains("open")}" aria-controls="${memberPanelId}">
         <span class="rank ${displayRank <= 3 ? "r" + displayRank : ""}">#${displayRank}</span>
@@ -291,6 +297,11 @@ export function renderStandings(clans, ctx = {}) {
       e.stopPropagation();
       if (clan.id && pinHandler) pinHandler(clan.id);
     });
+    const vs = el.querySelector(".vs-btn");
+    vs.addEventListener("click", e => {
+      e.stopPropagation();
+      if (clan.id && compareHandler) compareHandler(clan.id);
+    });
     host.appendChild(el);
   });
 
@@ -324,6 +335,52 @@ export function setOpenClan(id, open = true) {
   if (!id) return;
   if (open) openIds.add(id); else openIds.delete(id);
 }
+
+// Side-by-side compare modal. Takes exactly two decorated clan objects
+// out of buildStandings and produces a score-gap, roster fill, and top
+// three contributors on each side.
+export function renderCompare(a, b, ctx = {}) {
+  const modal = $("compareModal");
+  const card = $("compareCard");
+  if (!a || !b) { modal.hidden = true; return; }
+  const gap = a.score - b.score;
+  const side = c => {
+    const rows = [...c.rows]
+      .filter(r => r.delta != null)
+      .slice(0, 5)
+      .map(r => `<li>
+        <span class="n">${esc(r.name)}</span>
+        <span class="d ${r.delta > 0 ? "" : r.delta < 0 ? "neg" : "none"}">${fmt(r.delta)}</span>
+      </li>`).join("");
+    const cls = c.score > 0 ? "" : c.score < 0 ? "neg" : "zero";
+    return `<div class="cmp-side" style="--accent:${c.accent ?? "var(--grad-a)"}">
+      <div class="cmp-side-head">
+        ${crest(c, "crest")}
+        <div>
+          <div class="cname">${esc(c.tag)}</div>
+          <div class="cmeta">${esc(c.name)} · ${rosterLabel(c.members.length, ctx.maxMembers)}</div>
+        </div>
+      </div>
+      <div class="cmp-score ${cls}">${fmt(c.score)}</div>
+      <ul class="cmp-contribs">${rows || `<li><span class="n" style="color:var(--ink-dim)">No baselined contributors yet</span></li>`}</ul>
+    </div>`;
+  };
+  const gapLabel = gap === 0 ? "TIED" : `${gap > 0 ? "+" : ""}${gap.toLocaleString()}`;
+  card.innerHTML = `
+    <button class="cmp-close" type="button" data-close aria-label="Close">✕</button>
+    <div class="cmp-title">${esc(a.tag)} <span style="color:var(--ink-dim)">vs</span> ${esc(b.tag)}</div>
+    <div class="cmp-sub">Head-to-head · rank ${a.rank ?? "–"} vs rank ${b.rank ?? "–"}</div>
+    <div class="cmp-grid">
+      ${side(a)}
+      <div class="cmp-gap"><b>${gapLabel}</b><small>${gap === 0 ? "" : (gap > 0 ? esc(a.tag) + " leads" : esc(b.tag) + " leads")}</small></div>
+      ${side(b)}
+    </div>
+  `;
+  modal.hidden = false;
+  card.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", closeCompare));
+  modal.querySelector(".modal-scrim").addEventListener("click", closeCompare);
+}
+export function closeCompare() { $("compareModal").hidden = true; }
 
 // Top individual contributors across all clans, sorted by delta desc.
 // Rank is dense so ties share a number.
