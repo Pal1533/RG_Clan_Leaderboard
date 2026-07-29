@@ -68,6 +68,23 @@ export function renderHeaderStats(clans, waiting = 0) {
 // Format "N / max" when maxMembers is known, else fall back to "N members".
 const rosterLabel = (count, max) => max ? `${count} / ${max} members` : `${count} members`;
 
+// Momentum badge — shown on a clan row when we have any 30-min gain to
+// report. Positive gain is fire, dead-flat is a snowflake so users can
+// tell "unknown yet" from "definitely idle".
+const momentumChip = m => {
+  if (!m) return "";
+  const spanMin = Math.max(1, Math.round(m.spanMs / 60_000));
+  const label = `${m.gained > 0 ? "+" : ""}${Math.round(m.gained).toLocaleString()} last ${spanMin}m`;
+  if (m.gained > 0)  return `<span class="momentum hot"  title="Gained ${label}">🔥 ${label}</span>`;
+  if (m.gained < 0)  return `<span class="momentum cold" title="Lost ${label}">❄ ${label}</span>`;
+  return `<span class="momentum flat" title="No change ${label}">— flat ${spanMin}m</span>`;
+};
+
+const fmtClock = ms => {
+  const d = new Date(ms);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
+
 export function renderPodium(clans, ctx = {}) {
   const pod = $("podium");
   if (clans.length < 2) { pod.style.display = "none"; return; }
@@ -75,6 +92,10 @@ export function renderPodium(clans, ctx = {}) {
   const cls = c => c === clans[0] ? "p1" : c === clans[1] ? "p2" : "p3";
   const label = c => c === clans[0] ? "Champion Seat" : c === clans[1] ? "2nd" : "3rd";
   const isActive = c => c.rows.some(r => r.syncedAt && (Date.now() - r.syncedAt) < HOT_MS);
+  const projection = ctx.winnerProjection;
+  const projectionLine = projection && ctx.endTime
+    ? `<div class="projection">At this pace · <b>${projection.projected.toLocaleString()}</b> by ${fmtClock(ctx.endTime)}</div>`
+    : "";
   pod.innerHTML = order.map(c => `
     <div class="step ${cls(c)}" style="--accent:${c.accent ?? "var(--grad-a)"}">
       <div class="place">${label(c)}</div>
@@ -82,6 +103,7 @@ export function renderPodium(clans, ctx = {}) {
       <div class="cname">${esc(c.tag)}</div>
       <div class="cmeta">${esc(c.name)} · ${rosterLabel(c.members.length, ctx.maxMembers)}</div>
       <div class="cscore ${c.score < 0 ? "neg" : ""}">${fmt(c.score)}<small>MMR gained</small></div>
+      ${c === clans[0] ? projectionLine : ""}
     </div>`).join("");
   pod.style.display = "grid";
 }
@@ -99,6 +121,49 @@ export const getPrevDeltas = () => prevDeltas;
 // the persistence layer, it just fires the intent.
 let pinHandler = null;
 export function onPinToggle(fn) { pinHandler = fn; }
+
+// Compare toggle handler — user clicked the "vs" button on a clan row.
+let compareHandler = null;
+export function onCompareToggle(fn) { compareHandler = fn; }
+
+// Broadcast-style live feed: rank flips and big gains. Newest on the
+// left; capped so the DOM stays cheap. Older events fade based on age.
+const TICKER_MAX = 12;
+const tickerFeed = [];
+export function pushTickerEvents(events) {
+  if (!events.length) return;
+  events.forEach(e => tickerFeed.unshift({ ...e, addedAt: Date.now() }));
+  if (tickerFeed.length > TICKER_MAX) tickerFeed.length = TICKER_MAX;
+  renderTicker();
+}
+function tickerHTML(e) {
+  const age = Math.max(0, Math.floor((Date.now() - e.addedAt) / 60_000));
+  const ago = age === 0 ? "just now" : `${age}m ago`;
+  if (e.kind === "rank") {
+    const arrow = e.direction === "up" ? "↑" : "↓";
+    return `<span class="tick tick-${e.direction}" data-added="${e.addedAt}">
+      <span class="tick-arrow">${arrow}</span>
+      <b>${esc(e.tag)}</b> → #${e.newRank}
+      <small>was #${e.oldRank} · ${ago}</small>
+    </span>`;
+  }
+  if (e.kind === "gain") {
+    return `<span class="tick tick-up" data-added="${e.addedAt}">
+      <span class="tick-arrow">▲</span>
+      <b>${esc(e.name)}</b> +${e.gain.toLocaleString()}
+      <small>for ${esc(e.clanTag)} · ${ago}</small>
+    </span>`;
+  }
+  return "";
+}
+function renderTicker() {
+  const el = $("ticker"), strip = $("tickerStrip");
+  if (!tickerFeed.length) { el.style.display = "none"; return; }
+  el.style.display = "";
+  strip.innerHTML = tickerFeed.map(tickerHTML).join("");
+}
+// Re-render every 30s so the "Xm ago" timestamps and fade opacity stay honest.
+setInterval(() => { if (tickerFeed.length) renderTicker(); }, 30_000);
 
 // Repaint freshness classes on all visible avatars every 30s so a player
 // synced 4m30s ago transitions to "warm" without waiting for a snapshot.
@@ -190,7 +255,9 @@ export function renderStandings(clans, ctx = {}) {
     el.className = "clan" + (isPinned ? " pinned" : "");
     if (clan.id) el.dataset.clanId = clan.id;
     if (clan.id && openIds.has(clan.id)) el.classList.add("open");
+    const inCompare = ctx.compareSelection?.has(clan.id);
     el.innerHTML = `
+      <button class="vs-btn ${inCompare ? "on" : ""}" type="button" aria-label="Compare ${esc(clan.tag)}" aria-pressed="${inCompare}">vs</button>
       <button class="pin-btn" type="button" aria-label="${isPinned ? "Unpin" : "Pin"} ${esc(clan.tag)}" aria-pressed="${isPinned}">${isPinned ? "★" : "☆"}</button>
       <button class="clan-row" aria-expanded="${el.classList.contains("open")}" aria-controls="${memberPanelId}">
         <span class="rank ${displayRank <= 3 ? "r" + displayRank : ""}">#${displayRank}</span>
@@ -200,6 +267,7 @@ export function renderStandings(clans, ctx = {}) {
             <span class="clan-name-line">
               <span class="clan-tag">${esc(clan.tag)}</span>
               <span class="clan-meta">${esc(clan.name)} · ${rosterLabel(clan.members.length, ctx.maxMembers)}</span>
+              ${momentumChip(ctx.momentumById?.get(clan.id))}
             </span>
             <span class="relay ${counting.length ? "" : "empty"}" aria-hidden="true">${relay}</span>
           </span>
@@ -228,6 +296,11 @@ export function renderStandings(clans, ctx = {}) {
     pin.addEventListener("click", e => {
       e.stopPropagation();
       if (clan.id && pinHandler) pinHandler(clan.id);
+    });
+    const vs = el.querySelector(".vs-btn");
+    vs.addEventListener("click", e => {
+      e.stopPropagation();
+      if (clan.id && compareHandler) compareHandler(clan.id);
     });
     host.appendChild(el);
   });
@@ -261,6 +334,83 @@ export function renderStandings(clans, ctx = {}) {
 export function setOpenClan(id, open = true) {
   if (!id) return;
   if (open) openIds.add(id); else openIds.delete(id);
+}
+
+// Side-by-side compare modal. Takes exactly two decorated clan objects
+// out of buildStandings and produces a score-gap, roster fill, and top
+// three contributors on each side.
+export function renderCompare(a, b, ctx = {}) {
+  const modal = $("compareModal");
+  const card = $("compareCard");
+  if (!a || !b) { modal.hidden = true; return; }
+  const gap = a.score - b.score;
+  const side = c => {
+    const rows = [...c.rows]
+      .filter(r => r.delta != null)
+      .slice(0, 5)
+      .map(r => `<li>
+        <span class="n">${esc(r.name)}</span>
+        <span class="d ${r.delta > 0 ? "" : r.delta < 0 ? "neg" : "none"}">${fmt(r.delta)}</span>
+      </li>`).join("");
+    const cls = c.score > 0 ? "" : c.score < 0 ? "neg" : "zero";
+    return `<div class="cmp-side" style="--accent:${c.accent ?? "var(--grad-a)"}">
+      <div class="cmp-side-head">
+        ${crest(c, "crest")}
+        <div>
+          <div class="cname">${esc(c.tag)}</div>
+          <div class="cmeta">${esc(c.name)} · ${rosterLabel(c.members.length, ctx.maxMembers)}</div>
+        </div>
+      </div>
+      <div class="cmp-score ${cls}">${fmt(c.score)}</div>
+      <ul class="cmp-contribs">${rows || `<li><span class="n" style="color:var(--ink-dim)">No baselined contributors yet</span></li>`}</ul>
+    </div>`;
+  };
+  const gapLabel = gap === 0 ? "TIED" : `${gap > 0 ? "+" : ""}${gap.toLocaleString()}`;
+  card.innerHTML = `
+    <button class="cmp-close" type="button" data-close aria-label="Close">✕</button>
+    <div class="cmp-title">${esc(a.tag)} <span style="color:var(--ink-dim)">vs</span> ${esc(b.tag)}</div>
+    <div class="cmp-sub">Head-to-head · rank ${a.rank ?? "–"} vs rank ${b.rank ?? "–"}</div>
+    <div class="cmp-grid">
+      ${side(a)}
+      <div class="cmp-gap"><b>${gapLabel}</b><small>${gap === 0 ? "" : (gap > 0 ? esc(a.tag) + " leads" : esc(b.tag) + " leads")}</small></div>
+      ${side(b)}
+    </div>
+  `;
+  modal.hidden = false;
+  card.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", closeCompare));
+  modal.querySelector(".modal-scrim").addEventListener("click", closeCompare);
+}
+export function closeCompare() { $("compareModal").hidden = true; }
+
+// Full-screen event-end celebration. Fires canvas-confetti on open,
+// stops after ~3s so the CPU can idle. Dismiss button removes the overlay.
+export async function showEventEndReveal(standings) {
+  if (!standings.length) return;
+  const [winner, second, third] = standings;
+  $("revealChamp").textContent = winner.tag;
+  $("revealName").textContent = winner.name;
+  $("revealScore").innerHTML = `${fmt(winner.score)}<small>MMR gained</small>`;
+  const others = [second, third].filter(Boolean).map((c, i) => `
+    <li class="p${i + 2}"><b>#${i + 2}</b> ${esc(c.tag)} <small>${fmt(c.score)}</small></li>`).join("");
+  $("revealPodium").innerHTML = others;
+  const overlay = $("endReveal");
+  overlay.hidden = false;
+  try {
+    const confetti = (await import("https://esm.sh/canvas-confetti@1.9.3")).default;
+    const canvas = $("revealConfetti");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const fire = confetti.create(canvas, { resize: true, useWorker: true });
+    const end = Date.now() + 2600;
+    (function frame() {
+      fire({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 },
+             colors: ["#A855F7", "#E44BE0", "#FFD24A"] });
+      fire({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 },
+             colors: ["#A855F7", "#E44BE0", "#FFD24A"] });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+  } catch (e) { console.warn("[ClashCup] confetti unavailable:", e.message); }
+  $("revealDismiss").onclick = () => { overlay.hidden = true; };
 }
 
 // Top individual contributors across all clans, sorted by delta desc.
