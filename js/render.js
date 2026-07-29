@@ -382,6 +382,37 @@ export function renderCompare(a, b, ctx = {}) {
 }
 export function closeCompare() { $("compareModal").hidden = true; }
 
+// Full-screen event-end celebration. Fires canvas-confetti on open,
+// stops after ~3s so the CPU can idle. Dismiss button removes the overlay.
+export async function showEventEndReveal(standings) {
+  if (!standings.length) return;
+  const [winner, second, third] = standings;
+  $("revealChamp").textContent = winner.tag;
+  $("revealName").textContent = winner.name;
+  $("revealScore").innerHTML = `${fmt(winner.score)}<small>MMR gained</small>`;
+  const others = [second, third].filter(Boolean).map((c, i) => `
+    <li class="p${i + 2}"><b>#${i + 2}</b> ${esc(c.tag)} <small>${fmt(c.score)}</small></li>`).join("");
+  $("revealPodium").innerHTML = others;
+  const overlay = $("endReveal");
+  overlay.hidden = false;
+  try {
+    const confetti = (await import("https://esm.sh/canvas-confetti@1.9.3")).default;
+    const canvas = $("revealConfetti");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const fire = confetti.create(canvas, { resize: true, useWorker: true });
+    const end = Date.now() + 2600;
+    (function frame() {
+      fire({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 },
+             colors: ["#A855F7", "#E44BE0", "#FFD24A"] });
+      fire({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 },
+             colors: ["#A855F7", "#E44BE0", "#FFD24A"] });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+  } catch (e) { console.warn("[ClashCup] confetti unavailable:", e.message); }
+  $("revealDismiss").onclick = () => { overlay.hidden = true; };
+}
+
 // Top individual contributors across all clans, sorted by delta desc.
 // Rank is dense so ties share a number.
 export function renderPlayers(players, ctx = {}) {
