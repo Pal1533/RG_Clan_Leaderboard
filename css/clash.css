@@ -484,6 +484,72 @@
     *,*::before,*::after{animation:none!important;transition:none!important}
   }
 
+  /* Event-end reveal — one-shot celebration overlay when phase flips to ended. */
+  .reveal{
+    position:fixed;inset:0;z-index:120;display:flex;
+    align-items:center;justify-content:center;padding:24px;
+    background:radial-gradient(1200px 800px at 50% 30%,rgba(168,85,247,.22),transparent 65%),
+      rgba(6,10,24,.94);
+    backdrop-filter:blur(8px);
+    animation:revealIn .5s ease-out;
+  }
+  .reveal[hidden]{display:none}
+  .reveal-confetti{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .reveal-inner{
+    position:relative;text-align:center;max-width:640px;
+    animation:revealPop .6s cubic-bezier(.16,.9,.3,1.1);
+  }
+  .reveal-eyebrow{
+    font-family:var(--display);font-weight:700;font-size:12px;
+    letter-spacing:.4em;color:var(--ink-dim);text-transform:uppercase;
+    margin-bottom:14px;
+  }
+  .reveal-champ{
+    font-family:var(--display);font-style:italic;font-weight:700;
+    font-size:clamp(56px,10vw,120px);line-height:.95;letter-spacing:-.02em;
+    text-transform:uppercase;
+    background:linear-gradient(93deg,var(--grad-a) 5%,var(--grad-b) 45%,var(--gold) 105%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 10px 40px rgba(255,210,74,.35));
+  }
+  .reveal-name{color:var(--ink);font-family:var(--display);font-weight:600;
+    font-size:22px;letter-spacing:.03em;margin-top:8px}
+  .reveal-score{font-family:var(--display);font-weight:700;
+    font-size:38px;color:var(--gain);margin-top:12px;
+    font-variant-numeric:tabular-nums}
+  .reveal-score small{display:block;font-size:11px;letter-spacing:.28em;
+    color:var(--ink-dim);font-weight:600;margin-top:4px;text-transform:uppercase}
+  .reveal-podium{
+    display:flex;justify-content:center;gap:12px;flex-wrap:wrap;
+    list-style:none;margin:28px 0 22px;padding:0;
+  }
+  .reveal-podium li{
+    padding:10px 16px;border-radius:12px;
+    background:rgba(12,18,48,.7);border:1px solid var(--line-strong);
+    font-family:var(--display);font-weight:700;letter-spacing:.03em;
+    display:flex;align-items:center;gap:10px;
+  }
+  .reveal-podium li b{color:var(--metal,var(--ink))}
+  .reveal-podium li.p2{--metal:var(--silver)}
+  .reveal-podium li.p3{--metal:var(--bronze)}
+  .reveal-podium li small{color:var(--ink-dim);font-weight:600;font-size:12px;
+    font-variant-numeric:tabular-nums}
+  .reveal-dismiss{
+    font-family:var(--display);font-weight:700;font-size:12px;
+    letter-spacing:.22em;text-transform:uppercase;
+    padding:12px 22px;border-radius:999px;cursor:pointer;
+    background:linear-gradient(93deg,var(--grad-a),var(--grad-b));
+    color:var(--ink);border:none;
+    box-shadow:0 12px 32px rgba(168,85,247,.35);
+    transition:transform .12s;
+  }
+  .reveal-dismiss:hover{transform:translateY(-2px)}
+  @keyframes revealIn{ from{opacity:0} to{opacity:1} }
+  @keyframes revealPop{
+    0%{opacity:0;transform:scale(.85)}
+    100%{opacity:1;transform:scale(1)}
+  }
+
   /* Streamer / broadcast mode — press F. Hides chrome, boosts type,
      centers the board. Meant for OBS overlays or fullscreen kiosks. */
   body.stream-mode{padding:24px 40px}

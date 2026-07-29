@@ -83,6 +83,19 @@
     <button class="link-btn" id="pickCancel" type="button">Cancel</button>
   </div>
 
+  <!-- Event-end reveal overlay — one-shot celebration when the event flips to ended. -->
+  <div class="reveal" id="endReveal" role="dialog" aria-modal="true" aria-label="Event ended" hidden>
+    <canvas class="reveal-confetti" id="revealConfetti"></canvas>
+    <div class="reveal-inner">
+      <div class="reveal-eyebrow">Event ended</div>
+      <div class="reveal-champ" id="revealChamp">–</div>
+      <div class="reveal-name"  id="revealName">–</div>
+      <div class="reveal-score" id="revealScore">–<small>MMR gained</small></div>
+      <ol class="reveal-podium" id="revealPodium"></ol>
+      <button class="reveal-dismiss" id="revealDismiss" type="button">See full standings</button>
+    </div>
+  </div>
+
   <section class="board" aria-label="Standings" id="clansBoard">
     <div class="board-head">
       <span>Rank</span><span>Clan</span><span class="num">Clan Score</span><span></span>

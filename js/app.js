@@ -1,11 +1,12 @@
 // Boot + Firestore wiring. Same access pattern as ATLAS: SDK ESM from
 // gstatic, unauthenticated reads, onSnapshot for both events/current and clans.
 import { FIREBASE_CONFIG, COLLECTIONS, SDK } from "./config.js";
-import { buildStandings, currentEventId } from "./scoring.js";
+import { buildStandings, currentEventId, eventPhase } from "./scoring.js";
 import { renderHeaderStats, renderPodium, renderStandings, renderPlayers,
          renderPhase, setEventTitle, setSyncLine, showDemoBanner, markSynced,
          renderPerms, setOpenClan, onPinToggle, onCompareToggle,
-         pushTickerEvents, renderCompare, closeCompare } from "./render.js";
+         pushTickerEvents, renderCompare, closeCompare,
+         showEventEndReveal } from "./render.js";
 import { DEMO } from "./demo-data.js";
 import { recordSnapshot, clanMomentum, projectScore, detectRankChanges,
          detectBigGains, historySpanMs } from "./history.js";
@@ -30,6 +31,12 @@ const savePinned = () =>
 // Head-to-head compare selection. Max 2; picking a third replaces the
 // oldest so the vs button always feels responsive.
 const compareSelection = new Set();
+
+// Track prev phase so we can fire the celebration only on the transition
+// into "ended", not repeatedly. localStorage guards against a repeat
+// firing across page reloads for the same event id.
+let lastPhase = null;
+const REVEAL_KEY = "clashcup:endRevealShown";
 
 const millisOf = t => (t?.toMillis ? t.toMillis() : (typeof t === "number" ? t : 0));
 
@@ -109,6 +116,17 @@ function renderAll({ recordHistory = false } = {}) {
   renderHeaderStats(standings, waiting);
   renderPodium(standings, ctx);
   renderPerms(eventConfig?.perms);
+
+  // Fire the celebration once, exactly when phase transitions to ended.
+  const phase = eventPhase(eventConfig);
+  if (lastPhase && lastPhase !== "ended" && phase === "ended" && standings.length) {
+    const evId = currentEventId(eventConfig);
+    if (localStorage.getItem(REVEAL_KEY) !== evId) {
+      localStorage.setItem(REVEAL_KEY, evId);
+      showEventEndReveal(standings);
+    }
+  }
+  lastPhase = phase;
 
   const clansBoard = document.getElementById("clansBoard");
   const playersBoard = document.getElementById("playersBoard");
