@@ -68,6 +68,23 @@ export function renderHeaderStats(clans, waiting = 0) {
 // Format "N / max" when maxMembers is known, else fall back to "N members".
 const rosterLabel = (count, max) => max ? `${count} / ${max} members` : `${count} members`;
 
+// Momentum badge — shown on a clan row when we have any 30-min gain to
+// report. Positive gain is fire, dead-flat is a snowflake so users can
+// tell "unknown yet" from "definitely idle".
+const momentumChip = m => {
+  if (!m) return "";
+  const spanMin = Math.max(1, Math.round(m.spanMs / 60_000));
+  const label = `${m.gained > 0 ? "+" : ""}${Math.round(m.gained).toLocaleString()} last ${spanMin}m`;
+  if (m.gained > 0)  return `<span class="momentum hot"  title="Gained ${label}">🔥 ${label}</span>`;
+  if (m.gained < 0)  return `<span class="momentum cold" title="Lost ${label}">❄ ${label}</span>`;
+  return `<span class="momentum flat" title="No change ${label}">— flat ${spanMin}m</span>`;
+};
+
+const fmtClock = ms => {
+  const d = new Date(ms);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
+
 export function renderPodium(clans, ctx = {}) {
   const pod = $("podium");
   if (clans.length < 2) { pod.style.display = "none"; return; }
@@ -75,6 +92,10 @@ export function renderPodium(clans, ctx = {}) {
   const cls = c => c === clans[0] ? "p1" : c === clans[1] ? "p2" : "p3";
   const label = c => c === clans[0] ? "Champion Seat" : c === clans[1] ? "2nd" : "3rd";
   const isActive = c => c.rows.some(r => r.syncedAt && (Date.now() - r.syncedAt) < HOT_MS);
+  const projection = ctx.winnerProjection;
+  const projectionLine = projection && ctx.endTime
+    ? `<div class="projection">At this pace · <b>${projection.projected.toLocaleString()}</b> by ${fmtClock(ctx.endTime)}</div>`
+    : "";
   pod.innerHTML = order.map(c => `
     <div class="step ${cls(c)}" style="--accent:${c.accent ?? "var(--grad-a)"}">
       <div class="place">${label(c)}</div>
@@ -82,6 +103,7 @@ export function renderPodium(clans, ctx = {}) {
       <div class="cname">${esc(c.tag)}</div>
       <div class="cmeta">${esc(c.name)} · ${rosterLabel(c.members.length, ctx.maxMembers)}</div>
       <div class="cscore ${c.score < 0 ? "neg" : ""}">${fmt(c.score)}<small>MMR gained</small></div>
+      ${c === clans[0] ? projectionLine : ""}
     </div>`).join("");
   pod.style.display = "grid";
 }
@@ -99,6 +121,45 @@ export const getPrevDeltas = () => prevDeltas;
 // the persistence layer, it just fires the intent.
 let pinHandler = null;
 export function onPinToggle(fn) { pinHandler = fn; }
+
+// Broadcast-style live feed: rank flips and big gains. Newest on the
+// left; capped so the DOM stays cheap. Older events fade based on age.
+const TICKER_MAX = 12;
+const tickerFeed = [];
+export function pushTickerEvents(events) {
+  if (!events.length) return;
+  events.forEach(e => tickerFeed.unshift({ ...e, addedAt: Date.now() }));
+  if (tickerFeed.length > TICKER_MAX) tickerFeed.length = TICKER_MAX;
+  renderTicker();
+}
+function tickerHTML(e) {
+  const age = Math.max(0, Math.floor((Date.now() - e.addedAt) / 60_000));
+  const ago = age === 0 ? "just now" : `${age}m ago`;
+  if (e.kind === "rank") {
+    const arrow = e.direction === "up" ? "↑" : "↓";
+    return `<span class="tick tick-${e.direction}" data-added="${e.addedAt}">
+      <span class="tick-arrow">${arrow}</span>
+      <b>${esc(e.tag)}</b> → #${e.newRank}
+      <small>was #${e.oldRank} · ${ago}</small>
+    </span>`;
+  }
+  if (e.kind === "gain") {
+    return `<span class="tick tick-up" data-added="${e.addedAt}">
+      <span class="tick-arrow">▲</span>
+      <b>${esc(e.name)}</b> +${e.gain.toLocaleString()}
+      <small>for ${esc(e.clanTag)} · ${ago}</small>
+    </span>`;
+  }
+  return "";
+}
+function renderTicker() {
+  const el = $("ticker"), strip = $("tickerStrip");
+  if (!tickerFeed.length) { el.style.display = "none"; return; }
+  el.style.display = "";
+  strip.innerHTML = tickerFeed.map(tickerHTML).join("");
+}
+// Re-render every 30s so the "Xm ago" timestamps and fade opacity stay honest.
+setInterval(() => { if (tickerFeed.length) renderTicker(); }, 30_000);
 
 // Repaint freshness classes on all visible avatars every 30s so a player
 // synced 4m30s ago transitions to "warm" without waiting for a snapshot.
@@ -200,6 +261,7 @@ export function renderStandings(clans, ctx = {}) {
             <span class="clan-name-line">
               <span class="clan-tag">${esc(clan.tag)}</span>
               <span class="clan-meta">${esc(clan.name)} · ${rosterLabel(clan.members.length, ctx.maxMembers)}</span>
+              ${momentumChip(ctx.momentumById?.get(clan.id))}
             </span>
             <span class="relay ${counting.length ? "" : "empty"}" aria-hidden="true">${relay}</span>
           </span>
