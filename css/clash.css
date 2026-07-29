@@ -483,3 +483,28 @@
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation:none!important;transition:none!important}
   }
+
+  /* Streamer / broadcast mode — press F. Hides chrome, boosts type,
+     centers the board. Meant for OBS overlays or fullscreen kiosks. */
+  body.stream-mode{padding:24px 40px}
+  body.stream-mode .controls,
+  body.stream-mode footer,
+  body.stream-mode .banner,
+  body.stream-mode .perms-note,
+  body.stream-mode #syncLine,
+  body.stream-mode .actions,
+  body.stream-mode .pin-btn,
+  body.stream-mode .vs-btn{display:none!important}
+  body.stream-mode .wrap{max-width:1280px}
+  body.stream-mode h1{font-size:clamp(48px,8.5vw,96px)}
+  body.stream-mode .sub{font-size:19px}
+  body.stream-mode .clan-tag{font-size:22px}
+  body.stream-mode .clan-score .val{font-size:30px}
+  body.stream-mode .rank{font-size:32px}
+  body.stream-mode .board-head{grid-template-columns:80px 1fr 180px 0}
+  body.stream-mode .clan-row{grid-template-columns:80px 1fr 180px 0;padding:22px 26px;cursor:default}
+  body.stream-mode .step .cscore{font-size:34px}
+  body.stream-mode .step.p1 .cscore{font-size:44px}
+  body.stream-mode .clan.open .members{max-height:0}   /* collapse everything for a clean board */
+  body.stream-mode .chev{display:none}
+  body.stream-mode .ticker{padding:12px 18px;font-size:14px}
