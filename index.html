@@ -45,6 +45,11 @@
 
   <div class="banner" id="demoBanner">Demo data — Firestore unreachable from this preview. Open on GitHub Pages or locally for live standings.</div>
 
+  <section class="ticker" id="ticker" aria-label="Live event feed" style="display:none">
+    <span class="ticker-label">LIVE</span>
+    <div class="ticker-strip" id="tickerStrip"></div>
+  </section>
+
   <section class="podium" id="podium" style="display:none"></section>
 
   <div class="controls" id="controls">
@@ -58,6 +63,37 @@
       <option value="members">Sort · Members</option>
       <option value="alpha">Sort · A → Z</option>
     </select>
+    <div class="actions" role="toolbar" aria-label="Page actions">
+      <button class="act" id="shareBtn"   type="button" title="Copy shareable link" aria-label="Share">↗</button>
+      <button class="act" id="shotBtn"    type="button" title="Save standings as PNG" aria-label="Screenshot">◨</button>
+      <button class="act" id="streamBtn"  type="button" title="Streamer / fullscreen mode (F)" aria-label="Streamer mode">⛶</button>
+      <button class="act" id="notifyBtn"  type="button" title="Notify me on rank changes" aria-label="Notifications">🔔</button>
+    </div>
+  </div>
+
+  <!-- Compare modal — opened when the user picks two clans via the "vs" buttons. -->
+  <div class="modal" id="compareModal" role="dialog" aria-modal="true" aria-label="Compare clans" hidden>
+    <div class="modal-scrim" data-close></div>
+    <div class="modal-card" id="compareCard"></div>
+  </div>
+
+  <!-- Compare pick banner — shown after selecting one clan while waiting for the second. -->
+  <div class="pick-banner" id="pickBanner" hidden>
+    <span id="pickBannerText">Pick another clan to compare vs <b id="pickBannerA">–</b></span>
+    <button class="link-btn" id="pickCancel" type="button">Cancel</button>
+  </div>
+
+  <!-- Event-end reveal overlay — one-shot celebration when the event flips to ended. -->
+  <div class="reveal" id="endReveal" role="dialog" aria-modal="true" aria-label="Event ended" hidden>
+    <canvas class="reveal-confetti" id="revealConfetti"></canvas>
+    <div class="reveal-inner">
+      <div class="reveal-eyebrow">Event ended</div>
+      <div class="reveal-champ" id="revealChamp">–</div>
+      <div class="reveal-name"  id="revealName">–</div>
+      <div class="reveal-score" id="revealScore">–<small>MMR gained</small></div>
+      <ol class="reveal-podium" id="revealPodium"></ol>
+      <button class="reveal-dismiss" id="revealDismiss" type="button">See full standings</button>
+    </div>
   </div>
 
   <section class="board" aria-label="Standings" id="clansBoard">
