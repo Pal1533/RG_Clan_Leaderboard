@@ -179,7 +179,10 @@ async function boot() {
 // Deduped by keeping tickerFeed capped and letting the module drop old rows.
 function publishLiveEvents() {
   const events = [...detectRankChanges(), ...detectBigGains()];
-  if (events.length) pushTickerEvents(events);
+  if (events.length) {
+    pushTickerEvents(events);
+    maybeNotify(events);
+  }
 }
 
 // Deep link: #TAG opens that clan and scrolls to it once rendered.
@@ -231,6 +234,60 @@ async function shareCurrentView() {
   }
 }
 
+function toggleStreamMode() {
+  const on = document.body.classList.toggle("stream-mode");
+  document.getElementById("streamBtn").classList.toggle("on", on);
+  if (on && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => { /* user gesture required */ });
+  } else if (!on && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+document.addEventListener("fullscreenchange", () => {
+  // Keep the class in sync if user pressed ESC to exit fullscreen.
+  if (!document.fullscreenElement && document.body.classList.contains("stream-mode")) {
+    document.body.classList.remove("stream-mode");
+    document.getElementById("streamBtn").classList.remove("on");
+  }
+});
+
+// Opt-in browser notifications for rank changes involving pinned clans.
+const NOTIFY_KEY = "clashcup:notify";
+let notifyEnabled = localStorage.getItem(NOTIFY_KEY) === "1";
+let lastNotifyAt = 0;
+const NOTIFY_MIN_INTERVAL = 30_000;
+async function toggleNotify() {
+  const btn = document.getElementById("notifyBtn");
+  if (!("Notification" in window)) { toast("Notifications not supported here"); return; }
+  if (notifyEnabled) {
+    notifyEnabled = false;
+    localStorage.setItem(NOTIFY_KEY, "0");
+    btn.classList.remove("on");
+    toast("Notifications off");
+    return;
+  }
+  let perm = Notification.permission;
+  if (perm === "default") perm = await Notification.requestPermission();
+  if (perm !== "granted") { toast("Permission denied"); return; }
+  notifyEnabled = true;
+  localStorage.setItem(NOTIFY_KEY, "1");
+  btn.classList.add("on");
+  toast("Notifications on");
+}
+function maybeNotify(events) {
+  if (!notifyEnabled || Notification.permission !== "granted") return;
+  if (Date.now() - lastNotifyAt < NOTIFY_MIN_INTERVAL) return;
+  const relevant = events.find(e =>
+    e.kind === "rank" && lastRawClans.some(c => c.id && pinnedIds.has(c.id) && stripBracket(c.tag ?? c.name) === stripBracket(e.tag)));
+  if (!relevant) return;
+  lastNotifyAt = Date.now();
+  const body = relevant.direction === "up"
+    ? `${relevant.tag} climbed to #${relevant.newRank} (from #${relevant.oldRank})`
+    : `${relevant.tag} dropped to #${relevant.newRank} (from #${relevant.oldRank})`;
+  new Notification("Clan Clash Cup", { body, icon: "assets/icon-192.png" });
+}
+const stripBracket = s => String(s ?? "").replace(/[\[\]]/g, "").trim();
+
 async function screenshotStandings() {
   toast("Rendering PNG…", 3500);
   try {
@@ -276,17 +333,32 @@ function wireControls() {
 
   document.getElementById("shareBtn").addEventListener("click", shareCurrentView);
   document.getElementById("shotBtn").addEventListener("click", screenshotStandings);
+  document.getElementById("streamBtn").addEventListener("click", toggleStreamMode);
+  document.getElementById("notifyBtn").addEventListener("click", toggleNotify);
   document.getElementById("pickCancel").addEventListener("click", () => {
     compareSelection.clear();
     updateCompareUI();
   });
   document.addEventListener("keydown", e => {
+    // "F" (not in text inputs) toggles streamer mode.
+    if ((e.key === "f" || e.key === "F") && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName)) {
+      toggleStreamMode();
+      return;
+    }
     if (e.key === "Escape") {
       closeCompare();
       compareSelection.clear();
       updateCompareUI();
     }
   });
+  // Reflect existing permission state on load so the button matches reality.
+  if (notifyEnabled && "Notification" in window && Notification.permission === "granted") {
+    document.getElementById("notifyBtn").classList.add("on");
+  } else if (notifyEnabled) {
+    // We had it enabled but permission was revoked externally.
+    notifyEnabled = false;
+    localStorage.setItem(NOTIFY_KEY, "0");
+  }
 }
 
 onPinToggle(id => {
