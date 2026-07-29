@@ -179,6 +179,23 @@
   .clan-tag{font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:.02em}
   .clan-meta{font-size:13px;color:var(--ink-dim);font-weight:600;letter-spacing:.03em}
 
+  .momentum{
+    display:inline-flex;align-items:center;gap:5px;
+    font-family:var(--display);font-weight:700;font-size:11px;
+    letter-spacing:.06em;padding:3px 8px;border-radius:6px;
+    border:1px solid transparent;font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+  .momentum.hot{color:var(--gain);border-color:rgba(74,222,128,.35);
+    background:rgba(74,222,128,.08);text-shadow:0 0 6px rgba(74,222,128,.4)}
+  .momentum.cold{color:var(--loss);border-color:rgba(251,113,133,.35);
+    background:rgba(251,113,133,.06)}
+  .momentum.flat{color:var(--ink-dim);border-color:var(--line);
+    background:rgba(255,255,255,.02)}
+  .projection{margin-top:8px;font-family:var(--display);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim)}
+  .projection b{color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums}
+
   .relay{display:flex;height:8px;border-radius:999px;overflow:hidden;
     background:rgba(255,255,255,.05);max-width:480px}
   .relay span{display:block;height:100%;min-width:2px;transition:filter .15s ease}
@@ -285,6 +302,42 @@
     font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:.14em;
     text-transform:uppercase;border:1px solid rgba(255,210,74,.35);
     background:rgba(255,210,74,.07);color:var(--gold);display:none}
+
+  /* Broadcast-style ticker fed by history diffs — rank flips and big gains. */
+  .ticker{
+    display:flex;align-items:center;gap:12px;
+    margin:0 0 18px;padding:10px 14px;border-radius:14px;
+    border:1px solid var(--line);background:rgba(12,18,48,.72);
+    backdrop-filter:blur(6px);overflow:hidden;
+  }
+  .ticker-label{
+    flex:none;font-family:var(--display);font-weight:700;font-size:11px;
+    letter-spacing:.32em;padding:5px 10px;border-radius:6px;
+    background:linear-gradient(93deg,var(--grad-a),var(--grad-b));color:var(--ink);
+  }
+  .ticker-strip{
+    display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;
+    scrollbar-width:none;-ms-overflow-style:none;
+    mask-image:linear-gradient(90deg,black 92%,transparent);
+    -webkit-mask-image:linear-gradient(90deg,black 92%,transparent);
+  }
+  .ticker-strip::-webkit-scrollbar{display:none}
+  .tick{
+    flex:none;display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--body);font-size:13px;font-weight:600;
+    padding:6px 12px;border-radius:999px;
+    border:1px solid var(--line-strong);background:rgba(255,255,255,.03);
+    color:var(--ink);white-space:nowrap;animation:tickIn .32s ease-out;
+  }
+  .tick b{font-family:var(--display);font-weight:700;letter-spacing:.03em}
+  .tick small{color:var(--ink-dim);font-weight:600;font-size:11px}
+  .tick-arrow{font-family:var(--display);font-weight:700;font-size:13px}
+  .tick-up   .tick-arrow{color:var(--gain);text-shadow:0 0 8px var(--gain)}
+  .tick-down .tick-arrow{color:var(--loss);text-shadow:0 0 8px var(--loss)}
+  @keyframes tickIn{
+    from{opacity:0;transform:translateX(-14px)}
+    to  {opacity:1;transform:translateX(0)}
+  }
 
   footer{text-align:center;margin-top:26px;color:var(--ink-dim);font-size:13px;
     font-weight:600;letter-spacing:.05em;line-height:1.8}

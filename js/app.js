@@ -4,8 +4,10 @@ import { FIREBASE_CONFIG, COLLECTIONS, SDK } from "./config.js";
 import { buildStandings, currentEventId } from "./scoring.js";
 import { renderHeaderStats, renderPodium, renderStandings, renderPlayers,
          renderPhase, setEventTitle, setSyncLine, showDemoBanner, markSynced,
-         renderPerms, setOpenClan, onPinToggle } from "./render.js";
+         renderPerms, setOpenClan, onPinToggle, pushTickerEvents } from "./render.js";
 import { DEMO } from "./demo-data.js";
+import { recordSnapshot, clanMomentum, projectScore, detectRankChanges,
+         detectBigGains, historySpanMs } from "./history.js";
 
 let eventConfig = null;
 let lastRawClans = [];
@@ -64,18 +66,38 @@ function buildPlayerBoard(standings) {
   return rows.slice(0, 25);
 }
 
-function renderAll() {
+function renderAll({ recordHistory = false } = {}) {
   const standings = buildStandings(lastRawClans, eventConfig);
   standings.forEach((c, i) => { c.rank = i + 1; });
+  // History records happen once per real snapshot (not on UI-only re-renders
+  // like tab switch or sort change), so momentum reflects data velocity
+  // rather than click rate.
+  if (recordHistory) recordSnapshot(standings);
+
   const evId = currentEventId(eventConfig);
   const waiting = evId ? lastRawClans.filter(c => c.eventId !== evId).length : 0;
-  // MVP = top single contributor across every clan. Ties break by first-seen.
   const allPlayers = buildPlayerBoard(standings);
   const mvpUserId = allPlayers[0]?.userId ?? null;
+
+  // Build per-clan momentum + projection derived from history.
+  const momentumById = new Map();
+  standings.forEach(c => {
+    const m = clanMomentum(c.id);
+    momentumById.set(c.id, m);
+  });
+  const winnerProjection = eventConfig?.endTime && standings[0]
+    ? projectScore(standings[0].id, eventConfig.endTime)
+    : null;
+
   const ctx = {
     maxMembers: eventConfig?.maxMembers ?? null,
     pinned: pinnedIds,
     mvpUserId,
+    momentumById,
+    winnerProjection,
+    winnerTag: standings[0]?.tag ?? null,
+    endTime: eventConfig?.endTime ?? null,
+    historyReady: historySpanMs() >= 60_000,
   };
 
   renderHeaderStats(standings, waiting);
@@ -112,7 +134,7 @@ function loadDemo(reason) {
   setEventTitle(eventConfig.name);
   renderPhase(eventConfig);
   lastRawClans = DEMO.clans;
-  renderAll();
+  renderAll({ recordHistory: true });
   maybeApplyInitialHash();
 }
 
@@ -138,12 +160,20 @@ async function boot() {
     fb.onSnapshot(fb.collection(fb.db, COLLECTIONS.clans), snap => {
       lastRawClans = [];
       snap.forEach(ds => lastRawClans.push({ id: ds.id, ...ds.data() }));
-      renderAll();
+      renderAll({ recordHistory: true });
+      publishLiveEvents();
       markSynced();
       setSyncLine(`Live from Firestore <code>rgleaderboard</code>`);
       maybeApplyInitialHash();
     }, err => loadDemo("clans listener: " + err.message));
   } catch (e) { loadDemo(e.message); }
+}
+
+// Combine history-derived events into the ticker after each snapshot.
+// Deduped by keeping tickerFeed capped and letting the module drop old rows.
+function publishLiveEvents() {
+  const events = [...detectRankChanges(), ...detectBigGains()];
+  if (events.length) pushTickerEvents(events);
 }
 
 // Deep link: #TAG opens that clan and scrolls to it once rendered.
