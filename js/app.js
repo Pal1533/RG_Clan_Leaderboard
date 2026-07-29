@@ -4,7 +4,8 @@ import { FIREBASE_CONFIG, COLLECTIONS, SDK } from "./config.js";
 import { buildStandings, currentEventId } from "./scoring.js";
 import { renderHeaderStats, renderPodium, renderStandings, renderPlayers,
          renderPhase, setEventTitle, setSyncLine, showDemoBanner, markSynced,
-         renderPerms, setOpenClan, onPinToggle, pushTickerEvents } from "./render.js";
+         renderPerms, setOpenClan, onPinToggle, onCompareToggle,
+         pushTickerEvents, renderCompare, closeCompare } from "./render.js";
 import { DEMO } from "./demo-data.js";
 import { recordSnapshot, clanMomentum, projectScore, detectRankChanges,
          detectBigGains, historySpanMs } from "./history.js";
@@ -25,6 +26,10 @@ const loadPinned = () => {
 const pinnedIds = loadPinned();
 const savePinned = () =>
   localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...pinnedIds]));
+
+// Head-to-head compare selection. Max 2; picking a third replaces the
+// oldest so the vs button always feels responsive.
+const compareSelection = new Set();
 
 const millisOf = t => (t?.toMillis ? t.toMillis() : (typeof t === "number" ? t : 0));
 
@@ -98,6 +103,7 @@ function renderAll({ recordHistory = false } = {}) {
     winnerTag: standings[0]?.tag ?? null,
     endTime: eventConfig?.endTime ?? null,
     historyReady: historySpanMs() >= 60_000,
+    compareSelection,
   };
 
   renderHeaderStats(standings, waiting);
@@ -196,6 +202,55 @@ function applyHashDeepLink() {
   });
 }
 
+function toast(msg, ms = 1800) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+async function shareCurrentView() {
+  const url = new URL(location.href);
+  // If a clan is expanded, put its tag in the hash so the link deep-links.
+  const openClan = document.querySelector(".clan.open");
+  if (openClan) {
+    const tag = openClan.querySelector(".clan-tag")?.textContent?.replace(/[\[\]]/g, "").trim();
+    if (tag) url.hash = tag;
+  }
+  const href = url.toString();
+  if (navigator.share) {
+    try { await navigator.share({ title: document.title, url: href }); return; }
+    catch { /* user dismissed — fall back to copy */ }
+  }
+  try {
+    await navigator.clipboard.writeText(href);
+    toast("Link copied");
+  } catch {
+    toast("Copy failed — long-press the URL bar");
+  }
+}
+
+async function screenshotStandings() {
+  toast("Rendering PNG…", 3500);
+  try {
+    const { toPng } = await import("https://esm.sh/html-to-image@1.11.13");
+    const target = document.querySelector(".wrap");
+    const dataUrl = await toPng(target, {
+      backgroundColor: "#060A18",
+      pixelRatio: 2,
+      filter: node => !node.classList?.contains?.("pin-btn") && !node.classList?.contains?.("vs-btn"),
+    });
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `clash-cup-${new Date().toISOString().slice(0, 16).replace(":", "")}.png`;
+    a.click();
+  } catch (e) {
+    console.error(e);
+    toast("Screenshot failed");
+  }
+}
+
 function wireControls() {
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => {
@@ -218,6 +273,20 @@ function wireControls() {
     renderAll();
   });
   window.addEventListener("hashchange", applyHashDeepLink);
+
+  document.getElementById("shareBtn").addEventListener("click", shareCurrentView);
+  document.getElementById("shotBtn").addEventListener("click", screenshotStandings);
+  document.getElementById("pickCancel").addEventListener("click", () => {
+    compareSelection.clear();
+    updateCompareUI();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      closeCompare();
+      compareSelection.clear();
+      updateCompareUI();
+    }
+  });
 }
 
 onPinToggle(id => {
@@ -225,6 +294,47 @@ onPinToggle(id => {
   savePinned();
   renderAll();
 });
+
+// Compare picker: click once, banner appears asking for a second clan.
+// Click a second clan → open the modal. Click the same clan twice cancels.
+onCompareToggle(id => {
+  if (compareSelection.has(id)) {
+    compareSelection.delete(id);
+    updateCompareUI();
+    return;
+  }
+  compareSelection.add(id);
+  if (compareSelection.size > 2) {
+    const first = compareSelection.values().next().value;
+    compareSelection.delete(first);
+  }
+  if (compareSelection.size === 2) openCompare();
+  updateCompareUI();
+});
+
+function openCompare() {
+  const standings = buildStandings(lastRawClans, eventConfig);
+  standings.forEach((c, i) => { c.rank = i + 1; });
+  const [aId, bId] = [...compareSelection];
+  const a = standings.find(c => c.id === aId);
+  const b = standings.find(c => c.id === bId);
+  renderCompare(a, b, { maxMembers: eventConfig?.maxMembers ?? null });
+}
+
+function updateCompareUI() {
+  const banner = document.getElementById("pickBanner");
+  const nameEl = document.getElementById("pickBannerA");
+  if (compareSelection.size === 1) {
+    const [id] = [...compareSelection];
+    const standings = buildStandings(lastRawClans, eventConfig);
+    const clan = standings.find(c => c.id === id);
+    nameEl.textContent = clan?.tag ?? "…";
+    banner.hidden = false;
+  } else {
+    banner.hidden = true;
+  }
+  renderAll();
+}
 
 // First-render hook: apply any incoming URL hash once data is present.
 let hashApplied = false;
