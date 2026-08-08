@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createVisibilityController } from "../js/live-state.js";
+import {
+  clanListenerPolicy,
+  createVisibilityController,
+} from "../js/live-state.js";
+
+test("clan listener policy is phase-aware", () => {
+  // Live reads only during the active window. Upcoming + ended freeze on
+  // one cold fetch so we don't pay for a listener when the HUD isn't
+  // writing to clan docs anyway.
+  assert.equal(clanListenerPolicy("active"), "live");
+  assert.equal(clanListenerPolicy("upcoming"), "oneshot");
+  assert.equal(clanListenerPolicy("ended"), "oneshot");
+  assert.equal(clanListenerPolicy("none"), "off");
+  assert.equal(clanListenerPolicy(null), "off");
+});
 
 function fakeDocument() {
   const listeners = new Map();

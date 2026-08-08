@@ -162,6 +162,23 @@ export async function syncServerClock(fetchImpl, url, clock, now = () => Date.no
   return clock.setOffset(calculateServerOffset(serverDate, startedAt, receivedAt));
 }
 
+/**
+ * Clan Clash listener policy by event phase.
+ * - live: keep an eventId-scoped clans onSnapshot
+ * - oneshot: cold load once, then detach (frozen snapshot in memory)
+ * - off: no clans listener (no event scheduled)
+ *
+ * Live reads only fire during "active" phase — upcoming and ended both
+ * get a single fetch and then hold the last-known standings in memory.
+ * Between events the HUD stops writing to clan docs, so a live stream
+ * during upcoming/ended would be pure waste.
+ */
+export function clanListenerPolicy(phase) {
+  if (phase === "active") return "live";
+  if (phase === "ended" || phase === "upcoming") return "oneshot";
+  return "off";
+}
+
 export function createVisibilityController({
   document: targetDocument,
   subscribe,
