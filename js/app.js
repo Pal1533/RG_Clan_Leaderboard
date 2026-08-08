@@ -27,6 +27,7 @@ import {
   showAdminUnavailable,
 } from "./admin.js";
 import {
+  clanListenerPolicy,
   createServerClock,
   createSnapshotCoordinator,
   createVisibilityController,
@@ -316,10 +317,10 @@ async function boot() {
   let fb;
   try {
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
-    const { getFirestore, doc, collection, onSnapshot } =
+    const { getFirestore, doc, collection, onSnapshot, query, where, getDocs } =
       await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const app = initializeApp(FIREBASE_CONFIG);
-    fb = { db: getFirestore(app), doc, collection, onSnapshot };
+    fb = { db: getFirestore(app), doc, collection, onSnapshot, query, where, getDocs };
     initClanAdmin({ app, db: fb.db }).catch(error => {
       console.error("[ClashCup] admin login failed:", error);
       showAdminUnavailable("Admin login could not load.");
@@ -363,35 +364,100 @@ async function boot() {
     coordinator.beginCycle();
     let stopEvent = () => {};
     let stopClans = () => {};
+    let clansAttachedFor = null;
+    let endedOneShotDone = false;
+
+    const detachClans = () => {
+      stopClans();
+      stopClans = () => {};
+      clansAttachedFor = null;
+    };
+
+    const publishClans = (snapshot, { fromCache = false } = {}) => {
+      if (!isCurrent()) return;
+      const clans = [];
+      snapshot.forEach(docSnapshot =>
+        clans.push({ id: docSnapshot.id, ...docSnapshot.data() }));
+      coordinator.receiveClans(clans, { fromCache });
+    };
+
+    const attachLiveClans = (eventId) => {
+      if (!eventId || clansAttachedFor === eventId) return;
+      detachClans();
+      clansAttachedFor = eventId;
+      const clansQuery = fb.query(
+        fb.collection(fb.db, COLLECTIONS.clans),
+        fb.where("eventId", "==", eventId),
+      );
+      stopClans = fb.onSnapshot(
+        clansQuery,
+        snapshot => publishClans(snapshot, {
+          fromCache: snapshot.metadata.fromCache,
+        }),
+        error => {
+          if (isCurrent()) coordinator.failClans(error);
+        },
+      );
+    };
+
+    const loadEndedClansOnce = async (eventId) => {
+      if (!eventId || endedOneShotDone) return;
+      endedOneShotDone = true;
+      detachClans();
+      try {
+        const clansQuery = fb.query(
+          fb.collection(fb.db, COLLECTIONS.clans),
+          fb.where("eventId", "==", eventId),
+        );
+        const snapshot = await fb.getDocs(clansQuery);
+        publishClans(snapshot, { fromCache: false });
+      } catch (error) {
+        if (isCurrent()) coordinator.failClans(error);
+      }
+    };
+
+    const syncClanListeners = (event) => {
+      const phase = eventPhase(event, serverClock.now());
+      const policy = clanListenerPolicy(phase);
+      const eventId = currentEventId(event);
+      if (policy === "live") {
+        endedOneShotDone = false;
+        attachLiveClans(eventId);
+        return;
+      }
+      if (policy === "oneshot") {
+        // Already had a live stream this session — keep memory, stop reads.
+        detachClans();
+        if (endedOneShotDone) return;
+        if (lastRawClans.length) {
+          endedOneShotDone = true;
+          if (isCurrent()) {
+            coordinator.receiveClans(lastRawClans, { fromCache: true });
+          }
+          return;
+        }
+        void loadEndedClansOnce(eventId);
+        return;
+      }
+      detachClans();
+      if (isCurrent()) coordinator.receiveClans([], { fromCache: true });
+    };
+
     try {
       stopEvent = fb.onSnapshot(
         fb.doc(fb.db, ...COLLECTIONS.eventDoc),
-        { includeMetadataChanges: true },
         snapshot => {
           if (!isCurrent()) return;
-          coordinator.receiveEvent(
-            snapshot.exists() ? parseEventDoc(snapshot.data()) : null,
-            { fromCache: snapshot.metadata.fromCache },
-          );
+          const event = snapshot.exists()
+            ? parseEventDoc(snapshot.data())
+            : null;
+          coordinator.receiveEvent(event, {
+            fromCache: snapshot.metadata.fromCache,
+          });
+          syncClanListeners(event);
         },
         error => {
           if (isCurrent()) coordinator.failEvent(error);
-        },
-      );
-      stopClans = fb.onSnapshot(
-        fb.collection(fb.db, COLLECTIONS.clans),
-        { includeMetadataChanges: true },
-        snapshot => {
-          if (!isCurrent()) return;
-          const clans = [];
-          snapshot.forEach(docSnapshot =>
-            clans.push({ id: docSnapshot.id, ...docSnapshot.data() }));
-          coordinator.receiveClans(clans, {
-            fromCache: snapshot.metadata.fromCache,
-          });
-        },
-        error => {
-          if (isCurrent()) coordinator.failClans(error);
         },
       );
     } catch (error) {
@@ -401,7 +467,7 @@ async function boot() {
     return () => {
       if (isCurrent()) listenerGeneration += 1;
       stopEvent();
-      stopClans();
+      detachClans();
     };
   };
 
