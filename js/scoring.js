@@ -11,6 +11,8 @@ import {
 
 export const stripTMP = s => String(s ?? "").replace(/<[^>]*>/g, "").trim();
 
+export const STARTING_LINEUP_SIZE = 5;
+
 export const currentEventId = eventConfig =>
   eventConfig ? String(eventConfig.startTime) : null;
 
@@ -20,6 +22,26 @@ export const eventPhase = (eventConfig, now = Date.now()) => {
   if (now > eventConfig.endTime) return "ended";
   return "active";
 };
+
+export const benchFeatureEnabled = eventConfig =>
+  eventConfig?.perms?.useBench === true;
+
+// Starting-5 uids for scoring. Custom lineup wins; otherwise oldest 5 by
+// joinedAt fill the slots. Returns all uids when bench feature is off so
+// legacy math stays unchanged.
+export function startingLineupUids(clan, eventConfig) {
+  const members = clanMembers(clan);
+  if (!benchFeatureEnabled(eventConfig)) return members.map(m => m?.userId).filter(Boolean);
+  const explicit = Array.isArray(clan?.startingLineup)
+    ? clan.startingLineup.filter(uid => members.some(m => m?.userId === uid))
+    : [];
+  if (explicit.length) return explicit.slice(0, STARTING_LINEUP_SIZE);
+  return [...members]
+    .sort((a, b) => (a?.joinedAt ?? 0) - (b?.joinedAt ?? 0))
+    .slice(0, STARTING_LINEUP_SIZE)
+    .map(m => m?.userId)
+    .filter(Boolean);
+}
 
 // A clan's baseline only counts if it belongs to the current event —
 // stale baselines from a previous event score zero, same as in-game.
@@ -37,10 +59,13 @@ export const clanBaseline = (clan, eventConfig) => {
 // members without one get delta:null and contribute nothing yet.
 export function scoreClan(clan, eventConfig) {
   const baseline = clanBaseline(clan, eventConfig);
+  const starters = new Set(startingLineupUids(clan, eventConfig));
+  const benchOn = benchFeatureEnabled(eventConfig);
   const rows = clanMembers(clan).map(m => {
     const stat = effectiveClanMemberStat(clan, m);
     const base = baseline ? memberEventBaseline(clan, m) : null;
     const has = base != null && typeof stat.mmr === "number";
+    const isBench = benchOn && m?.userId != null && !starters.has(m.userId);
     return {
       userId: m.userId ?? null,
       name: stripTMP(m.name) || "Unknown",
@@ -48,10 +73,12 @@ export function scoreClan(clan, eventConfig) {
       mmr: typeof stat.mmr === "number" ? stat.mmr : null,
       base: has ? base : null,
       delta: has ? stat.mmr - base : null,
+      isBench,
       syncedAt: stat.syncedAt,
     };
   }).sort((a, b) => (b.delta ?? -Infinity) - (a.delta ?? -Infinity));
-  const score = rows.reduce((s, r) => s + (r.delta ?? 0), 0);
+  // Bench deltas exist for display but never roll up into the clan score.
+  const score = rows.reduce((s, r) => s + (r.isBench ? 0 : (r.delta ?? 0)), 0);
   return { rows, score, scored: baseline != null };
 }
 
