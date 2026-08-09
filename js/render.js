@@ -315,17 +315,20 @@ export function renderStandings(clans, ctx = {}) {
     const memberRows = clan.rows.map(r => {
       const ci = counting.findIndex(c => c === r);
       const seg = ci >= 0 ? segColor(hue, ci) : "var(--ink-dim)";
-      const deltaCell = r.delta == null
-        ? `<span class="delta none">no baseline</span>`
-        : `<span class="delta ${r.delta >= 0 ? "up" : "down"}">${fmt(r.delta)}</span>`;
+      const deltaCell = r.isBench
+        ? `<span class="delta bench" title="Bench for this event — MMR not scored">BENCH</span>`
+        : r.delta == null
+          ? `<span class="delta none">no baseline</span>`
+          : `<span class="delta ${r.delta >= 0 ? "up" : "down"}">${fmt(r.delta)}</span>`;
       const prev = prevDeltas.get(r.userId);
-      const gained = prev != null && r.delta != null && r.delta > prev;
+      const gained = prev != null && r.delta != null && r.delta > prev && !r.isBench;
       const isMvp = r.userId && r.userId === ctx.mvpUserId;
       const sync = syncClass(r.syncedAt);
       const rowCls = [
         r.delta == null ? "nobase" : "",
         gained ? "just-gained" : "",
         isMvp ? "mvp" : "",
+        r.isBench ? "bench" : "",
       ].filter(Boolean).join(" ");
       return `<tr class="${rowCls}">
         <td><div class="m-name">

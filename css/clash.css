@@ -529,7 +529,10 @@
   .role.elder{color:#7DD3FC;border-color:rgba(125,211,252,.35)}
   .delta{font-family:var(--display);font-weight:700}
   .delta.up{color:var(--gain)} .delta.down{color:var(--loss)} .delta.none{color:var(--ink-dim)}
+  .delta.bench{color:#ff9a3c;font-size:11px;letter-spacing:.14em}
   .nobase td{opacity:.5}
+  tr.bench td{opacity:.6}
+  tr.bench td:first-child .m-name{color:#ff9a3c}
   .note{font-size:12px;color:var(--ink-dim);letter-spacing:.05em;padding:10px 10px 0;font-weight:600}
 
   .board-head.players-head{grid-template-columns:64px 1fr 140px 100px}

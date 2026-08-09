@@ -5,6 +5,8 @@ import {
   buildStandings,
   buildWaitingRoster,
   scoreClan,
+  startingLineupUids,
+  startingLineupSize,
 } from "../js/scoring.js";
 
 const event = {
@@ -103,4 +105,89 @@ test("waiting roster includes stale clans and members without a baseline", () =>
     ["OLD", ["Alpha"]],
     ["NOW", ["Charlie"]],
   ]);
+});
+
+// ------- Bench feature -------
+
+const benchEvent = {
+  name: "Cup",
+  startTime: 1000,
+  endTime: 9000,
+  perms: { useBench: true },
+};
+
+test("bench off: all members score, no isBench flag", () => {
+  const clan = {
+    eventId: "1000",
+    members: [
+      { userId: "a", name: "A", mmr: 1100, joinedAt: 1, eventBaseline: 1000 },
+      { userId: "b", name: "B", mmr: 1200, joinedAt: 2, eventBaseline: 1000 },
+      { userId: "c", name: "C", mmr: 1300, joinedAt: 3, eventBaseline: 1000 },
+    ],
+  };
+  const scored = scoreClan(clan, event);
+  assert.equal(scored.score, 600);
+  assert.deepEqual(scored.rows.map(r => r.isBench), [false, false, false]);
+});
+
+test("bench on with 6 members, explicit lineup: only starters score", () => {
+  const clan = {
+    eventId: "1000",
+    startingLineup: ["a", "b", "c", "d", "e"],
+    members: [
+      { userId: "a", name: "A", mmr: 1100, joinedAt: 1, eventBaseline: 1000 },
+      { userId: "b", name: "B", mmr: 1100, joinedAt: 2, eventBaseline: 1000 },
+      { userId: "c", name: "C", mmr: 1100, joinedAt: 3, eventBaseline: 1000 },
+      { userId: "d", name: "D", mmr: 1100, joinedAt: 4, eventBaseline: 1000 },
+      { userId: "e", name: "E", mmr: 1100, joinedAt: 5, eventBaseline: 1000 },
+      { userId: "f", name: "F", mmr: 9999, joinedAt: 6, eventBaseline: 1000 },
+    ],
+  };
+  const scored = scoreClan(clan, benchEvent);
+  // 5 starters × 100 delta = 500; F's +8999 is bench, ignored.
+  assert.equal(scored.score, 500);
+  const fRow = scored.rows.find(r => r.userId === "f");
+  assert.equal(fRow.isBench, true);
+});
+
+test("bench on with 6 members, no explicit lineup: oldest-5-by-joinedAt are starters", () => {
+  const clan = {
+    eventId: "1000",
+    members: [
+      { userId: "a", name: "A", mmr: 1100, joinedAt: 1, eventBaseline: 1000 },
+      { userId: "b", name: "B", mmr: 1100, joinedAt: 2, eventBaseline: 1000 },
+      { userId: "c", name: "C", mmr: 1100, joinedAt: 3, eventBaseline: 1000 },
+      { userId: "d", name: "D", mmr: 1100, joinedAt: 4, eventBaseline: 1000 },
+      { userId: "e", name: "E", mmr: 1100, joinedAt: 5, eventBaseline: 1000 },
+      { userId: "f", name: "F", mmr: 9999, joinedAt: 6, eventBaseline: 1000 },
+    ],
+  };
+  const scored = scoreClan(clan, benchEvent);
+  assert.equal(scored.score, 500);
+  const fRow = scored.rows.find(r => r.userId === "f");
+  assert.equal(fRow.isBench, true);
+});
+
+test("startingLineupSize honors events/current.startingLineupSize override", () => {
+  assert.equal(startingLineupSize({}), 5);
+  assert.equal(startingLineupSize({ startingLineupSize: 6 }), 6);
+  assert.equal(startingLineupSize({ startingLineupSize: 21 }), 5); // out of range
+  assert.equal(startingLineupSize({ startingLineupSize: 0 }), 5);  // out of range
+});
+
+test("startingLineupUids caps to lineup size (dynamic)", () => {
+  const clan = {
+    members: [
+      { userId: "a", joinedAt: 1 },
+      { userId: "b", joinedAt: 2 },
+      { userId: "c", joinedAt: 3 },
+      { userId: "d", joinedAt: 4 },
+      { userId: "e", joinedAt: 5 },
+      { userId: "f", joinedAt: 6 },
+      { userId: "g", joinedAt: 7 },
+    ],
+  };
+  const sevenPlayerEvent = { ...benchEvent, startingLineupSize: 6 };
+  assert.equal(startingLineupUids(clan, sevenPlayerEvent).length, 6);
+  assert.equal(startingLineupUids(clan, benchEvent).length, 5);
 });
