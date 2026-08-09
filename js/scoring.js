@@ -11,7 +11,12 @@ import {
 
 export const stripTMP = s => String(s ?? "").replace(/<[^>]*>/g, "").trim();
 
-export const STARTING_LINEUP_SIZE = 5;
+export const DEFAULT_STARTING_LINEUP_SIZE = 5;
+
+export const startingLineupSize = eventConfig => {
+  const n = eventConfig?.startingLineupSize;
+  return (typeof n === "number" && n > 0 && n <= 20) ? n : DEFAULT_STARTING_LINEUP_SIZE;
+};
 
 export const currentEventId = eventConfig =>
   eventConfig ? String(eventConfig.startTime) : null;
@@ -35,10 +40,11 @@ export function startingLineupUids(clan, eventConfig) {
   const explicit = Array.isArray(clan?.startingLineup)
     ? clan.startingLineup.filter(uid => members.some(m => m?.userId === uid))
     : [];
-  if (explicit.length) return explicit.slice(0, STARTING_LINEUP_SIZE);
+  const size = startingLineupSize(eventConfig);
+  if (explicit.length) return explicit.slice(0, size);
   return [...members]
     .sort((a, b) => (a?.joinedAt ?? 0) - (b?.joinedAt ?? 0))
-    .slice(0, STARTING_LINEUP_SIZE)
+    .slice(0, size)
     .map(m => m?.userId)
     .filter(Boolean);
 }
