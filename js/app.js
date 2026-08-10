@@ -329,12 +329,27 @@ async function boot() {
   let setDocFn = null;
   try {
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
+    const appCheckSdk =
+      await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app-check.js`);
     const firestoreSdk =
       await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const {
       getFirestore, doc, collection, onSnapshot, query, where, getDocs, setDoc,
     } = firestoreSdk;
     const app = initializeApp(FIREBASE_CONFIG);
+
+    // reCAPTCHA v3 App Check. Locks Firestore access to whitelisted
+    // domains once enforcement is on in the Firebase console. Init
+    // errors are non-fatal so we still fall back to demo mode cleanly.
+    try {
+      const { initializeAppCheck, ReCaptchaV3Provider } = appCheckSdk;
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider("6LetM38tAAAAADvHq4SYd05r_DGK2AWJo8M3ZmJK"),
+        isTokenAutoRefreshEnabled: true,
+      });
+    } catch (error) {
+      console.warn("[clan] App Check init failed", error);
+    }
     setDocFn = setDoc;
     fb = { db: getFirestore(app), doc, collection, onSnapshot, query, where, getDocs, setDoc };
     initClanAdmin({
