@@ -360,8 +360,15 @@ async function boot() {
         // Delegates to the telemetry uploader created below. Guarded because
         // the auth observer can fire before the uploader is instantiated on
         // slow SDK loads.
-        if (nextIsAdmin) readTelemetry?.start?.();
-        else readTelemetry?.stop?.();
+        if (nextIsAdmin) {
+          readTelemetry?.start?.();
+          // Visitor uploads would double-report while an admin is signed
+          // in, so pause them.
+          visitorTelemetry?.stop?.();
+        } else {
+          readTelemetry?.stop?.();
+          visitorTelemetry?.start?.();
+        }
       },
     }).catch(error => {
       console.error("[ClashCup] admin login failed:", error);
@@ -388,6 +395,35 @@ async function boot() {
 
   const activeUnsubscribes = new Set();
   let blocked = budget.isTripped() && !enforcementDisabled;
+
+  // Safety net: wrap the raw fb.onSnapshot/fb.getDocs so any future call
+  // that forgot to use chargedOnSnapshot/chargedGetDocs still bumps the
+  // counter (labeled `raw:*` so it's obvious in telemetry). Keep the raw
+  // references for the wrappers below to use internally.
+  const rawOnSnapshot = fb.onSnapshot;
+  const rawGetDocs = fb.getDocs;
+  fb.onSnapshot = (target, next, error) => {
+    let firstDelivered = false;
+    return rawOnSnapshot(target, (snap) => {
+      if (!firstDelivered) {
+        firstDelivered = true;
+        budget.charge("raw:onSnapshot", Math.max(1, snap.size || 1));
+      } else {
+        budget.charge("raw:onSnapshot", Math.max(1, snap.docChanges().length));
+      }
+      try { next?.(snap); } catch (err) {
+        console.error("[ClashCup] onSnapshot handler threw", err);
+      }
+    }, error);
+  };
+  fb.getDocs = async (target) => {
+    const snap = await rawGetDocs(target);
+    budget.charge("raw:getDocs", Math.max(1, snap.size || 1));
+    return snap;
+  };
+  // The chargedOnSnapshot / chargedGetDocs helpers defined below use the
+  // stashed raw refs, so they charge under their proper labels instead of
+  // going through the wrapper (which would double-count).
   budget.onTrip((snap) => {
     if (enforcementDisabled) return;
     blocked = true;
@@ -408,7 +444,7 @@ async function boot() {
   // snapshot.size; subsequent charges use docChanges().length so tab-focus
   // re-hydrations don't inflate the per-listener cost.
   async function chargedGetDocs(target, label) {
-    const snapshot = await fb.getDocs(target);
+    const snapshot = await rawGetDocs(target);
     budget.charge(label, Math.max(1, snapshot.size || 1));
     return snapshot;
   }
@@ -420,7 +456,7 @@ async function boot() {
       return () => {};
     }
     let firstDelivered = false;
-    const unsub = fb.onSnapshot(
+    const unsub = rawOnSnapshot(
       target,
       (snap) => {
         if (!firstDelivered) {
@@ -454,11 +490,26 @@ async function boot() {
     catch { return false; }
   })();
   const gateway = {
-    // Merge-write so periodic polls keep updating the same doc without
-    // re-creating it. Rules restrict this collection to admin writers.
+    // Admin telemetry, gated to admin writers via rules.
     setReadStat: (docKey, payload) =>
       setDocFn(fb.doc(fb.db, "admin_read_stats", docKey), payload, { merge: true }),
+    // Visitor telemetry, shape-only rule so anonymous browsers can write.
+    setVisitorStat: (docKey, payload) =>
+      setDocFn(fb.doc(fb.db, "visitor_read_stats", docKey), payload, { merge: true }),
   };
+  // Persistent per-browser id so visitor sessions can be tied together
+  // for the admin dashboard even without auth.
+  const visitorDeviceId = (() => {
+    try {
+      const key = "clashcup:visitorDeviceId";
+      let id = window.localStorage?.getItem(key);
+      if (!id) {
+        id = (crypto?.randomUUID?.() || `dev-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`);
+        window.localStorage?.setItem(key, id);
+      }
+      return id;
+    } catch { return `dev-${Date.now().toString(36)}`; }
+  })();
   var readTelemetry = telemetryDisabled
     ? { start() {}, stop() {}, upload: async () => {} }
     : createReadTelemetryUploader({
@@ -466,6 +517,21 @@ async function boot() {
         budget,
         isAdmin: () => isAdminSession,
       });
+  // Visitor telemetry runs the whole time for non-admin browsers so we
+  // finally see the ~4K/day of reads that used to be invisible.
+  const visitorTelemetry = telemetryDisabled
+    ? { start() {}, stop() {}, upload: async () => {} }
+    : createReadTelemetryUploader({
+        gateway,
+        budget,
+        isAdmin: () => isAdminSession,
+        mode: "visitor",
+        deviceId: visitorDeviceId,
+      });
+  // Kick off visitor uploads immediately. onAdminChange swaps between
+  // admin + visitor once auth resolves; this covers the boot window
+  // before we know if the user is admin.
+  if (!isAdminSession) visitorTelemetry?.start?.();
   if (telemetryDisabled) {
     console.info("[ClashCup] read telemetry disabled via ?telemetry=off.");
   } else {
@@ -533,8 +599,9 @@ async function boot() {
         fb.collection(fb.db, COLLECTIONS.clans),
         fb.where("eventId", "==", eventId),
       );
-      stopClans = fb.onSnapshot(
+      stopClans = chargedOnSnapshot(
         clansQuery,
+        "clansLive",
         snapshot => publishClans(snapshot, {
           fromCache: snapshot.metadata.fromCache,
         }),
@@ -553,7 +620,7 @@ async function boot() {
           fb.collection(fb.db, COLLECTIONS.clans),
           fb.where("eventId", "==", eventId),
         );
-        const snapshot = await fb.getDocs(clansQuery);
+        const snapshot = await chargedGetDocs(clansQuery, "clansEndedOneShot");
         publishClans(snapshot, { fromCache: false });
       } catch (error) {
         if (isCurrent()) coordinator.failClans(error);

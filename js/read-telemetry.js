@@ -43,8 +43,15 @@ export function createReadTelemetryUploader({
   uploadIntervalMs = 60_000,
   logger = typeof console !== "undefined" ? console : null,
   now = () => Date.now(),
+  // "admin" (default) writes to admin_read_stats and requires isAdmin().
+  // "visitor" writes to visitor_read_stats and includes a deviceId. Rules
+  // don't require auth for the visitor collection, so anonymous clan-page
+  // browsers can report their reads too.
+  mode = "admin",
+  deviceId = null,
 } = {}) {
-  if (!gateway || typeof gateway.setReadStat !== "function") {
+  const writeMethod = mode === "visitor" ? "setVisitorStat" : "setReadStat";
+  if (!gateway || typeof gateway[writeMethod] !== "function") {
     return { start() {}, stop() {}, upload: async () => {}, sessionId: SESSION_ID };
   }
 
@@ -60,10 +67,12 @@ export function createReadTelemetryUploader({
   let running = false;
 
   async function upload({ final = false } = {}) {
-    if (!running || typeof isAdmin !== "function" || !isAdmin()) return;
+    if (!running) return;
+    // Admin mode gates uploads on the isAdmin() check; visitor mode skips
+    // that so anonymous clan-page browsers can still report their reads.
+    if (mode === "admin" && (typeof isAdmin !== "function" || !isAdmin())) return;
     const snap = budget?.snapshot?.() || { total: 0, perLabel: {}, tripped: false };
     // Skip identical payloads to avoid burning writes on quiet sessions.
-    // A "final" flush always writes so we capture the ending state.
     const payloadKey = `${snap.total}:${JSON.stringify(snap.perLabel || {})}:${snap.tripped ? 1 : 0}`;
     if (!final && payloadKey === lastPayloadKey) return;
     lastPayloadKey = payloadKey;
@@ -79,11 +88,16 @@ export function createReadTelemetryUploader({
       userAgent: typeof navigator !== "undefined" ? String(navigator.userAgent || "").slice(0, 200) : "",
       source: normalizedSource,
     };
+    if (mode === "visitor") {
+      // Rule requires a non-empty deviceId. Falls back to sessionId if the
+      // caller didn't supply one so the write still passes shape check.
+      payload.deviceId = String(deviceId || SESSION_ID);
+    }
 
     try {
-      await gateway.setReadStat(docKey(payload.date), payload);
+      await gateway[writeMethod](docKey(payload.date), payload);
     } catch (err) {
-      logger?.warn?.("[rgLB] telemetry upload failed:", err?.message || err);
+      logger?.warn?.("[RG SITE] telemetry upload failed:", err?.message || err);
     }
   }
 
