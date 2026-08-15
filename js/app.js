@@ -332,36 +332,20 @@ async function boot() {
   let setDocFn = null;
   try {
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
-    const appCheckSdk =
-      await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app-check.js`);
     const firestoreSdk =
       await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const {
       getFirestore, doc, collection, onSnapshot, query, where, getDoc, getDocs, setDoc,
     } = firestoreSdk;
     const app = initializeApp(FIREBASE_CONFIG);
-
-    // reCAPTCHA v3 App Check. Locks Firestore access to whitelisted
-    // domains once enforcement is on in the Firebase console. Init
-    // errors are non-fatal so we still fall back to demo mode cleanly.
-    try {
-      const { initializeAppCheck, ReCaptchaV3Provider } = appCheckSdk;
-      initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider("6LetM38tAAAAADvHq4SYd05r_DGK2AWJo8M3ZmJK"),
-        isTokenAutoRefreshEnabled: true,
-      });
-    } catch (error) {
-      console.warn("[clan] App Check init failed", error);
-    }
     setDocFn = setDoc;
     fb = { db: getFirestore(app), doc, collection, onSnapshot, query, where, getDoc, getDocs, setDoc };
-    try {
-      const haltSnap = await getDoc(doc(fb.db, "admin", "blacklist"));
+    getDoc(doc(fb.db, "admin", "blacklist")).then((haltSnap) => {
       if (haltSnap.data()?.pauseWrites === true) {
         const haltBanner = document.getElementById("haltBanner");
         if (haltBanner) haltBanner.hidden = false;
       }
-    } catch {}
+    }).catch(() => {});
     initClanAdmin({
       app,
       db: fb.db,
