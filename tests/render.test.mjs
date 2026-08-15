@@ -28,6 +28,11 @@ test("missing events and listener errors render different empty states", () => {
   assert.equal(standingsEmptyCopy("filter").title, "No clans match");
 });
 
+test("member role class only accepts known roles", () => {
+  assert.match(renderSource, /ROLE_CLASS = new Set\(\["leader", "coleader", "elder", "member"\]\)/);
+  assert.match(renderSource, /class="role \$\{roleClass\(r\.role\)\}"/);
+});
+
 test("compare sides show one tag and the clan name", () => {
   assert.match(
     renderSource,

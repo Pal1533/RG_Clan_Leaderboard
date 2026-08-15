@@ -60,8 +60,11 @@ let selectedArchiveId = null;
 let archiveReplayIndex = -1;
 const PINNED_STORAGE_KEY = "clashcup:pinnedClans";
 const loadPinned = () => {
-  try { return new Set(JSON.parse(localStorage.getItem(PINNED_STORAGE_KEY) || "[]")); }
-  catch { return new Set(); }
+  try {
+    const raw = JSON.parse(localStorage.getItem(PINNED_STORAGE_KEY) || "[]");
+    if (!Array.isArray(raw)) return new Set();
+    return new Set(raw.filter(id => typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id)));
+  } catch { return new Set(); }
 };
 const pinnedIds = loadPinned();
 const savePinned = () =>
@@ -334,7 +337,7 @@ async function boot() {
     const firestoreSdk =
       await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const {
-      getFirestore, doc, collection, onSnapshot, query, where, getDocs, setDoc,
+      getFirestore, doc, collection, onSnapshot, query, where, getDoc, getDocs, setDoc,
     } = firestoreSdk;
     const app = initializeApp(FIREBASE_CONFIG);
 
@@ -351,7 +354,14 @@ async function boot() {
       console.warn("[clan] App Check init failed", error);
     }
     setDocFn = setDoc;
-    fb = { db: getFirestore(app), doc, collection, onSnapshot, query, where, getDocs, setDoc };
+    fb = { db: getFirestore(app), doc, collection, onSnapshot, query, where, getDoc, getDocs, setDoc };
+    try {
+      const haltSnap = await getDoc(doc(fb.db, "admin", "blacklist"));
+      if (haltSnap.data()?.pauseWrites === true) {
+        const haltBanner = document.getElementById("haltBanner");
+        if (haltBanner) haltBanner.hidden = false;
+      }
+    } catch {}
     initClanAdmin({
       app,
       db: fb.db,
@@ -493,9 +503,9 @@ async function boot() {
     // Admin telemetry, gated to admin writers via rules.
     setReadStat: (docKey, payload) =>
       setDocFn(fb.doc(fb.db, "admin_read_stats", docKey), payload, { merge: true }),
-    // Visitor telemetry, shape-only rule so anonymous browsers can write.
-    setVisitorStat: (docKey, payload) =>
-      setDocFn(fb.doc(fb.db, "visitor_read_stats", docKey), payload, { merge: true }),
+    // Visitor writes are off. They were being used to burn write quota.
+    // Admin telemetry is unchanged.
+    setVisitorStat: async () => {},
   };
   // Persistent per-browser id so visitor sessions can be tied together
   // for the admin dashboard even without auth.

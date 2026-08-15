@@ -11,6 +11,10 @@ export function setNowProvider(provider) {
 const fmt = n => (n > 0 ? "+" : "") + Math.round(n).toLocaleString();
 const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ROLE_CLASS = new Set(["leader", "coleader", "elder", "member"]);
+const roleClass = role => ROLE_CLASS.has(String(role || "").toLowerCase())
+  ? String(role).toLowerCase()
+  : "member";
 
 const initials = name => {
   const p = name.replace(/[\[\]]/g, "").split(/\s+/).filter(Boolean);
@@ -336,7 +340,7 @@ export function renderStandings(clans, ctx = {}) {
           ${isMvp ? `<span class="mvp-crown" title="Top contributor across all clans" aria-label="MVP">♛</span>` : ""}
           ${esc(r.name)}
         </div></td>
-        <td><span class="role ${esc(r.role)}">${esc(r.role)}</span></td>
+        <td><span class="role ${roleClass(r.role)}">${esc(r.role)}</span></td>
         <td class="num">${r.base != null ? r.base.toLocaleString() : "—"}</td>
         <td class="num">${r.mmr != null ? r.mmr.toLocaleString() : "—"}</td>
         <td class="num">${deltaCell}</td>
@@ -345,7 +349,7 @@ export function renderStandings(clans, ctx = {}) {
     const clanIsActive = clan.rows.some(r => r.syncedAt && (nowMs() - r.syncedAt) < HOT_MS);
 
     const hasNoBase = clan.rows.some(r => r.delta == null);
-    const memberPanelId = `members-${clan.id ?? idx}`;
+    const memberPanelId = `members-${esc(clan.id ?? idx)}`;
     const isPinned = clan.id && pinned.has(clan.id);
     const displayRank = clan.rank ?? idx + 1;
     const el = document.createElement("div");
