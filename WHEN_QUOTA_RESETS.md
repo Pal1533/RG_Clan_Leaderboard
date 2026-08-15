@@ -1,85 +1,27 @@
 # When Spark quota resets
 
-Do the publish steps first. Do not wait around — the old holes stay open until the new rules are live.
+Rules are already live. HUD 19.8, the publisher hold, and both sites are already pushed. Tampermonkeys `main` now enforces admins.
 
 Leave App Check off until reCAPTCHA v3 is fixed.
 
 ---
 
-## You
+## You — already done
 
-### 1. Publish the rules
+- ~~Publish the rules~~ — deployed to `rgleaderboard` on 2026-08-15
+- ~~Add `pauseWrites: false` on `admin/blacklist`~~ — field is there, left off
+- ~~Push HUD 19.8~~ — Tampermonkeys `main` (`rg_hud.user.js`)
+- ~~Push the publisher + workflow~~ — same repo
+- ~~Push both sites~~ — clan + player `main`
+- ~~Turn on enforce admins~~ — `wiljdaws/Tampermonkeys` `main`
 
-Firebase Console → Firestore → Rules
+Optional, still your call: set `admin/blacklist.minVersion` to `19.8` if you want to force old HUDs to update. `19.6` still passes today.
 
-Paste everything from:
+---
 
-`/Users/dawsonwilliams/code/firebase/firestore.rules`
+## You — when quota comes back
 
-Click **Publish**.
-
-The file still says “DO NOT DEPLOY DURING THE ACTIVE CLAN EVENT”. Ignore that. You asked to ship this.
-
-### 2. Add the kill switch field (so Pal can find it)
-
-Firebase Console → Firestore → `admin` → `blacklist`
-
-Add field:
-
-- Name: `pauseWrites`
-- Type: boolean
-- Value: `false`
-
-Save. Leave it false. Pal’s freeze card is at the bottom of this file.
-
-### 3. Push the HUD
-
-Repo: Tampermonkeys  
-Branch: `main`  
-File: `rg_hud.user.js` (now **19.8**)
-
-Clients pick it up from the usual update URL.
-
-Optional: on `admin/blacklist`, set `minVersion` to `19.8` if you want to force old HUDs to update. `19.6` still passes today.
-
-### 4. Push the publisher
-
-Same Tampermonkeys repo:
-
-- `firebase/scripts/build-leaderboard-cache.mjs`
-- `.github/workflows/publish-leaderboard-json.yml`
-- the tests that go with them
-
-This is the hold that keeps a new fake #1 off the public JSON.
-
-### 5. Push both sites
-
-**Clan** (`RG_Clan_Leaderboard`)
-
-- `index.html`
-- `js/app.js`
-- `js/render.js`
-- `css/clash.css`
-
-**Player** (`rg_player_leaderboard`)
-
-- `index.html`
-- `js/app.js`
-- `js/firebase.js`
-- `js/config.js`
-- `js/render.js`
-- `js/read-dashboard.js`
-- `js/publish-pipeline.js`
-- `css/leaderboard.css`
-
-### 6. Lock Tampermonkeys `main`
-
-GitHub → `wiljdaws/Tampermonkeys` → Settings → Branches → `main`
-
-Turn on **enforce admins**.  
-Protection is already there (1 review, no force-push). This stops an admin from pushing straight to `main`.
-
-### 7. Smoke test (same day, after publish)
+### 1. Smoke test
 
 As a normal visitor (signed out):
 
@@ -92,7 +34,7 @@ On your own HUD account:
 - 1v1 / 2v2 / 3v3 / wins still write
 - Wait ~20 seconds between modes (rule interval is 15s)
 
-### 8. Send Dawson usage
+### 2. Send Dawson usage
 
 Firebase Console → Usage (first hour after reset)
 
@@ -109,7 +51,7 @@ Then tell Dawson: **reset, go**
 
 ## Dawson (after you say “reset, go”)
 
-1. Confirm the new rules are the ones live in the console.
+1. Confirm the live rules still match `/Users/dawsonwilliams/code/firebase/firestore.rules`.
 2. Check whether the loop is dead:
    - unauth `list` on leaderboard / submissions
    - unauth `visitor_read_stats` writes
@@ -119,8 +61,6 @@ Then tell Dawson: **reset, go**
 5. Check quota burn. After a healthy hour it should be thousands of reads, not tens of thousands. If it is still climbing fast, something is still scanning.
 6. Confirm logged-out visitors are not hammering Firestore `list` after a CDN blip.
 7. If you want, walk Pal through a 30-second freeze / unfreeze on a throwaway write so he has done it once.
-
-Dawson does not need to wait on the reset to keep coding. He does need the rules published and a look at usage before he can say the attacker is gone.
 
 ---
 
