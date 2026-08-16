@@ -1,0 +1,22 @@
+name: Feature request
+description: An idea for the Clan Clash site.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What do you want
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it helps
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Extra notes
+      description: If this changes scoring, say how it should stay aligned with ATLAS.

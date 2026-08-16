@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Rocket Goal Championship Discord
+    url: https://discord.gg/MDz7hsrh9m
+    about: Ask Pal or JesusDied4U, or talk through a bug before filing.
+  - name: Live Clan Clash board
+    url: https://wiljdaws.github.io/RG_Clan_Leaderboard/
+    about: Live clan event standings.
+  - name: ATLAS HUD
+    url: https://github.com/wiljdaws/Tampermonkeys
+    about: The userscript that writes clan and event data.

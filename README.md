@@ -1,52 +1,71 @@
 # Clan Clash Cup — Live Standings
 
-Live clan leaderboard for the Rocket Goal Clan Clash Cup. Reads the same
-Firestore project the ATLAS userscript writes to and renders clan standings
-with per-member contributions, live via `onSnapshot`.
+Live clan standings for the Rocket Goal Clan Clash Cup. ATLAS locks each
+member's baseline and this site shows the event score.
 
-## Structure
+**[Open the board](https://wiljdaws.github.io/RG_Clan_Leaderboard/)**
+· [Player board](https://wiljdaws.github.io/rg_player_leaderboard/)
+· [Install ATLAS](https://github.com/wiljdaws/Tampermonkeys)
+· [Discord](https://discord.gg/MDz7hsrh9m)
 
-```
-index.html        page shell
-css/clash.css     all styling (design tokens in :root)
-js/config.js      Firebase config + collection names + SDK version
-js/members.js     legacy-array/current-map member compatibility
-js/scoring.js     ATLAS-identical event scoring (pure, importable)
-js/render.js      DOM rendering
-js/app.js         boot + Firestore listeners
-js/live-state.js  snapshot readiness, clock, visibility lifecycle
-js/history.js     event-scoped local archive and replay
-js/demo-data.js   offline fallback sample data
-```
+The page listens to `events/current` and `clans` in the same Firebase project
+ATLAS writes to. Admins sign in with Google to manage the event.
 
 ## Scoring
 
-Ported line-for-line from ATLAS (`computeClanEventScore`,
-`clanBaselineForCurrentEvent`, `eventPhase`):
+Ported from ATLAS (`computeClanEventScore`, `clanBaselineForCurrentEvent`,
+`eventPhase`) so the HUD and this site stay on the same number:
 
 - Contribution = current MMR − member `eventBaseline`
-- Legacy clan-level `eventBaseline[userId]` remains a fallback
+- Legacy clan-level `eventBaseline[userId]` is a fallback
 - Newer `memberStats[userId]` wins over stale member MMR
 - A clan only scores if its `eventId` matches `String(events/current.startTime)`
-- Members without a locked baseline show "no baseline" and count zero
+- Members without a locked baseline show “no baseline” and count zero
 - Clan score = sum across all baselined members (negatives count)
 
-When Clash standings get integrated into the main leaderboard site, import
-`js/scoring.js` there instead of duplicating the math.
+If you change this math, change ATLAS in the same window and run `npm test`.
 
 ## Local history
 
-The archive stores small event-scoped score snapshots in this browser only.
-It does not write to Firebase and never feeds active event scoring. Use
-“Clear this event” in the Archive tab to remove one saved event.
+The Archive tab stores small event-scoped snapshots in this browser only. It
+does not write to Firebase and never feeds live scoring. Use “Clear this event”
+to drop one saved event.
 
-## Deploy
+## Local setup
 
-No build step. Push to a GitHub Pages branch (or drop into the existing
-site repo as `/clash/`) and it's live. If the page falls back to demo mode
-in production, check that Firestore rules allow unauthenticated reads on
-`clans` and `events/current` (ATLAS already relies on this).
+```bash
+npm test
+```
 
-## Versioning
+No build step. Push to `main` and GitHub Pages updates.
 
-Whole-tenth versions only (13.4 → 13.5), matching the ATLAS convention.
+## Layout
+
+```
+index.html        page shell
+privacy.html      privacy policy
+terms.html        terms of use
+css/clash.css     design tokens and layout
+js/app.js         boot + Firestore listeners
+js/scoring.js     ATLAS-identical event math
+js/members.js     legacy-array / current-map members
+js/render.js      standings and clan views
+js/live-state.js  snapshot readiness and visibility
+js/history.js     event-scoped local archive
+```
+
+## Related
+
+- [ATLAS HUD](https://github.com/wiljdaws/Tampermonkeys)
+- [Player leaderboard](https://github.com/wiljdaws/rg_player_leaderboard)
+
+## Community
+
+This is a fan project. It is not affiliated with Rocket Goal.
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security policy](SECURITY.md)
+- [MIT License](LICENSE)
+- [Privacy](https://wiljdaws.github.io/RG_Clan_Leaderboard/privacy.html)
+- [Terms](https://wiljdaws.github.io/RG_Clan_Leaderboard/terms.html)
