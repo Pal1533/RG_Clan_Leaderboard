@@ -272,6 +272,12 @@ export function standingsEmptyCopy(reason) {
       detail: "Try a different search — matches on tag or full name.",
     };
   }
+  if (reason === "admin") {
+    return {
+      title: "Live cup is admin-only",
+      detail: "Sign in as admin to load live standings. Archive still works on this device.",
+    };
+  }
   if (reason === "event") {
     return {
       title: "Event details unavailable",
@@ -622,6 +628,8 @@ export function renderPlayers(players, ctx = {}) {
   if (!players.length) {
     const copy = ctx.emptyReason === "filter"
       ? ["No players match", "Try a different name."]
+      : ctx.emptyReason === "admin"
+        ? ["Live cup is admin-only", "Sign in as admin to load live scores. Archive still works on this device."]
       : ctx.emptyReason === "event"
         ? ["Event details unavailable", "Player scores resume when the live event document returns."]
         : ctx.emptyReason === "error"

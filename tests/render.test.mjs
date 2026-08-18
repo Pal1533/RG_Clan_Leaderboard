@@ -24,6 +24,10 @@ test("missing events and listener errors render different empty states", () => {
     title: "Event details unavailable",
     detail: "Scores are paused until the live event document returns.",
   });
+  assert.deepEqual(standingsEmptyCopy("admin"), {
+    title: "Live cup is admin-only",
+    detail: "Sign in as admin to load live standings. Archive still works on this device.",
+  });
   assert.equal(standingsEmptyCopy("error").title, "Standings unavailable");
   assert.equal(standingsEmptyCopy("filter").title, "No clans match");
 });

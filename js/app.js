@@ -153,13 +153,21 @@ function renderAll({ recordHistory = false } = {}) {
     renderWaitingRoster([]);
     if (viewMode === "clans") {
       renderStandings([], {
-        emptyReason: liveState.eventError || liveState.clansError ? "error" : "event",
+        emptyReason: liveState.eventError || liveState.clansError
+          ? "error"
+          : isAdminSession
+            ? "event"
+            : "admin",
       });
       clansBoard.style.display = "";
       playersBoard.style.display = "none";
     } else {
       renderPlayers([], {
-        emptyReason: liveState.eventError || liveState.clansError ? "error" : "event",
+        emptyReason: liveState.eventError || liveState.clansError
+          ? "error"
+          : isAdminSession
+            ? "event"
+            : "admin",
       });
       clansBoard.style.display = "none";
       playersBoard.style.display = "";
@@ -322,6 +330,20 @@ function updateDataState(state) {
 // (matches admin_read_stats rules — non-admin writes would fail silently and
 // spam the console). Populated by initClanAdmin's onAdminChange callback.
 let isAdminSession = false;
+// Live clan/event listeners stay off until an admin signs in. Auth can
+// resolve before subscribe() exists, so these start as no-ops.
+let attachLiveListeners = () => {};
+let detachLiveListeners = () => {};
+function showPublicLiveHold() {
+  const haltBanner = document.getElementById("haltBanner");
+  if (haltBanner) haltBanner.hidden = true;
+  renderDataState(
+    "degraded",
+    "The live cup is available after admin sign-in. Archive still works on this device.",
+  );
+  setSyncLine("Live Firestore is admin-only. Use Archive for saved events.");
+  if (!eventConfig) renderAll();
+}
 // Public handle for the read-budget instance so ops can inspect counters
 // live from DevTools without threading through module exports. Same shape
 // as the player-leaderboard's __rgReadBudget global.
@@ -340,12 +362,12 @@ async function boot() {
     const app = initializeApp(FIREBASE_CONFIG);
     setDocFn = setDoc;
     fb = { db: getFirestore(app), doc, collection, onSnapshot, query, where, getDoc, getDocs, setDoc };
-    getDoc(doc(fb.db, "admin", "blacklist")).then((haltSnap) => {
-      if (haltSnap.data()?.pauseWrites === true) {
+    const checkWritesPaused = () => {
+      getDoc(doc(fb.db, "admin", "blacklist")).then((haltSnap) => {
         const haltBanner = document.getElementById("haltBanner");
-        if (haltBanner) haltBanner.hidden = false;
-      }
-    }).catch(() => {});
+        if (haltBanner) haltBanner.hidden = haltSnap.data()?.pauseWrites !== true;
+      }).catch(() => {});
+    };
     initClanAdmin({
       app,
       db: fb.db,
@@ -359,9 +381,13 @@ async function boot() {
           // Visitor uploads would double-report while an admin is signed
           // in, so pause them.
           visitorTelemetry?.stop?.();
+          checkWritesPaused();
+          attachLiveListeners();
         } else {
           readTelemetry?.stop?.();
           visitorTelemetry?.start?.();
+          detachLiveListeners();
+          showPublicLiveHold();
         }
       },
     }).catch(error => {
@@ -680,11 +706,21 @@ async function boot() {
     };
   };
 
-  createVisibilityController({
-    document,
-    subscribe,
-    onHidden: () => setSyncLine("Live listeners pause while this page is hidden."),
-  });
+  let visibilityController = null;
+  attachLiveListeners = () => {
+    if (visibilityController) return;
+    visibilityController = createVisibilityController({
+      document,
+      subscribe,
+      onHidden: () => setSyncLine("Live listeners pause while this page is hidden."),
+    });
+  };
+  detachLiveListeners = () => {
+    visibilityController?.dispose();
+    visibilityController = null;
+  };
+  if (isAdminSession) attachLiveListeners();
+  else showPublicLiveHold();
 
   const handleNetwork = () => {
     online = navigator.onLine;
