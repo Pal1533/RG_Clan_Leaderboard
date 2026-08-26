@@ -41,8 +41,8 @@ GitHub Pages serves `main`.
 
 ## Related repos
 
-- ATLAS HUD: [wiljdaws/Tampermonkeys](https://github.com/wiljdaws/Tampermonkeys)
-- Player board: [wiljdaws/rg_player_leaderboard](https://github.com/wiljdaws/rg_player_leaderboard)
+- ATLAS HUD: [Pal1533/Tampermonkeys](https://github.com/Pal1533/Tampermonkeys)
+- Player board: [Pal1533/rg_player_leaderboard](https://github.com/Pal1533/rg_player_leaderboard)
 
 ## Security
 
