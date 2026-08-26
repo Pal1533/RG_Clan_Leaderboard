@@ -3,9 +3,9 @@
 Live clan standings for the Rocket Goal Clan Clash Cup. ATLAS locks each
 member's baseline and this site shows the event score.
 
-**[Open the board](https://pal153.github.io/RG_Clan_Leaderboard/)**
-· [Player board](https://pal153.github.io/rg_player_leaderboard/)
-· [Install ATLAS](https://github.com/pal153/Tampermonkeys)
+**[Open the board](https://pal1533.github.io/RG_Clan_Leaderboard/)**
+· [Player board](https://pal1533.github.io/rg_player_leaderboard/)
+· [Install ATLAS](https://github.com/Pal1533/Tampermonkeys)
 · [Discord](https://discord.gg/MDz7hsrh9m)
 
 The page listens to `events/current` and `clans` in the same Firebase project
@@ -56,8 +56,8 @@ js/history.js     event-scoped local archive
 
 ## Related
 
-- [ATLAS HUD](https://github.com/pal153/Tampermonkeys)
-- [Player leaderboard](https://github.com/pal153/rg_player_leaderboard)
+- [ATLAS HUD](https://github.com/Pal1533/Tampermonkeys)
+- [Player leaderboard](https://github.com/Pal1533/rg_player_leaderboard)
 
 ## Community
 
@@ -67,5 +67,5 @@ This is a fan project. It is not affiliated with Rocket Goal.
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Security policy](SECURITY.md)
 - [MIT License](LICENSE)
-- [Privacy](https://pal153.github.io/RG_Clan_Leaderboard/privacy.html)
-- [Terms](https://pal153.github.io/RG_Clan_Leaderboard/terms.html)
+- [Privacy](https://pal1533.github.io/RG_Clan_Leaderboard/privacy.html)
+- [Terms](https://pal1533.github.io/RG_Clan_Leaderboard/terms.html)

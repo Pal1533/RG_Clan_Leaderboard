@@ -13,7 +13,7 @@ Leave App Check off until reCAPTCHA v3 is fixed.
 - ~~Push HUD 19.8~~ — Tampermonkeys `main` (`rg_hud.user.js`)
 - ~~Push the publisher + workflow~~ — same repo
 - ~~Push both sites~~ — clan + player `main`
-- ~~Turn on enforce admins~~ — `pal153/Tampermonkeys` `main`
+- ~~Turn on enforce admins~~ — `Pal1533/Tampermonkeys` `main`
 
 Optional, still your call: set `admin/blacklist.minVersion` to `19.8` if you want to force old HUDs to update. `19.6` still passes today.
 
